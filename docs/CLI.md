@@ -1,0 +1,505 @@
+# Nebular CLI guide
+
+## What Nebular does
+
+Nebular measures communication and execution efficiency for AI-agent turns.
+Its hooks and agent-facing commands cooperate to record:
+
+- estimated and actual elapsed time;
+- input and output word counts;
+- task type, outcome, short keywords, and correction counts;
+- numeric user-to-agent (`u2a`) and agent-to-user (`a2u`) clarity scores;
+- aggregate "nebulosity" derived from ten clarity dimensions.
+
+Data stays in a local SQLite database. Nebular processes hook prompt and
+response text in memory to obtain counts and heuristics, but does not store the
+text, rationale, source code, credentials, or token content. The same invariant
+applies to transcript import and learned heuristics. An import dump contains
+safe metadata and a scoring scaffold, never prompt or answer text.
+
+Nebular provides turn hooks, explicit logging, localized reports and exports,
+historical estimates and tips, heuristic learning and calibration, historical
+import, and metric-definition management.
+
+## Installation
+
+### Requirements
+
+The release installer requires:
+
+- a POSIX shell;
+- `curl` or `wget`;
+- `sha256sum`, `shasum`, or `openssl` for checksum verification;
+- `tar` for Linux and macOS archives, or `unzip` for Windows archives.
+
+Published release packages cover Linux, macOS, and Windows on `x86_64` and
+`aarch64`. On Windows, run the shell installer from an environment that provides
+`sh` and `uname`, such as Git Bash, MSYS2, or Cygwin.
+
+| Platform | Architecture | Release asset |
+| --- | --- | --- |
+| Linux | `x86_64` | `nebular-linux-x86_64.tar.gz` |
+| Linux | `aarch64` | `nebular-linux-aarch64.tar.gz` |
+| macOS | `x86_64` | `nebular-macos-x86_64.tar.gz` |
+| macOS | `aarch64` | `nebular-macos-aarch64.tar.gz` |
+| Windows | `x86_64` | `nebular-windows-x86_64.zip` |
+| Windows | `aarch64` | `nebular-windows-aarch64.zip` |
+
+### Recommended: verified release installer
+
+Download and inspect the script, then run it:
+
+```sh
+curl --proto '=https' --tlsv1.2 -fsSLO \
+  https://raw.githubusercontent.com/ennerperez/nebular/develop/install.sh
+sh install.sh
+```
+
+By default the installer:
+
+1. resolves the latest release for `ennerperez/nebular`;
+2. chooses an archive for the detected operating system and architecture;
+3. downloads the archive and `SHA256SUMS` into a temporary directory;
+4. verifies the checksum and rejects unsafe archive paths before extraction;
+5. installs the CLI to `~/.local/bin` and verifies `nebular --version`;
+6. detects installed AI agents and copies the bundled Nebular skill to each
+   detected user-level skills directory.
+
+The script never executes code downloaded from a release archive. If
+`~/.local/bin` is not on `PATH`, it prints a reminder after installation.
+
+Installer options:
+
+```text
+--version <version>    Release tag, such as v0.1.0 (default: latest)
+--repo <owner/repo>    GitHub repository (default: ennerperez/nebular)
+--bin-dir <path>       CLI destination (default: ~/.local/bin)
+--agent <agent>        auto, all, codex, claude, gemini, opencode, generic,
+                       or none; may be repeated
+--skill-dir <path>     Additional skills root; may be repeated
+--no-cli               Install only the skill
+--no-skill             Install only the CLI
+-h, --help             Print installer help
+```
+
+Equivalent environment overrides are `NEBULAR_VERSION`, `NEBULAR_REPO`,
+`NEBULAR_INSTALL_DIR`, and `NEBULAR_AGENT`.
+
+Examples:
+
+```sh
+# Install a specific release to a custom binary directory.
+sh install.sh --version v0.1.0 --bin-dir "$HOME/bin"
+
+# Install only the CLI.
+sh install.sh --no-skill
+
+# Install only the skill for all known agents.
+sh install.sh --no-cli --agent all
+
+# Install the skill for an Agent Skills-compatible custom agent.
+sh install.sh --no-cli --skill-dir "$HOME/my-agent/skills"
+```
+
+### Agent detection and skill locations
+
+In `auto` mode, Nebular detects an agent when its executable or configuration
+directory exists. It installs the skill to:
+
+| Agent | Skill directory |
+| --- | --- |
+| Codex | `${CODEX_HOME:-~/.codex}/skills/nebular` |
+| Claude Code | `${CLAUDE_CONFIG_DIR:-~/.claude}/skills/nebular` |
+| Gemini CLI | `${GEMINI_CLI_HOME:-~}/.gemini/skills/nebular` |
+| OpenCode | `${XDG_CONFIG_HOME:-~/.config}/opencode/skills/nebular` |
+| Generic fallback | `~/.agents/skills/nebular` |
+
+When no supported agent is detected, installer uses generic location.
+`--agent all` targets every known agent location. `--agent none` disables skill
+installation unless explicit `--skill-dir` targets were also supplied.
+
+Skill installation alone does not add host hook configuration. AI agent or host
+integration must invoke `nebular hook` at prompt, stop, and notification events
+where supported.
+
+### Install from a release archive
+
+Release archives contain platform binary, `README.md`, `LICENSE`, `docs`,
+embedded locale catalog sources under `locales`, and `skills/nebular`.
+Download matching archive and `SHA256SUMS` from repository's GitHub Releases
+page, verify archive, then place binary on `PATH` and copy skill directory to an
+agent location listed above. Locale strings are compiled into the executable;
+the binary needs no adjacent runtime catalog files.
+
+### Build from source
+
+Install Rust 1.85 or newer, clone repository, then run:
+
+```sh
+cargo build --release --locked --bin nebular
+```
+
+Executable is written to `target/release/nebular` (or
+`target/release/nebular.exe` on Windows). To install binary through Cargo:
+
+```sh
+cargo install --locked --path .
+```
+
+Copy `skills/nebular` manually when a source installation also needs Agent
+Skill.
+
+### Update and uninstall
+
+Nebular has no built-in update or uninstall command. Re-run `install.sh` to
+replace CLI and skill with latest or selected release.
+
+To uninstall, remove `nebular` executable from selected binary directory and
+remove `nebular` from each skills directory where installed. Metrics remain
+intact. Remove data directory separately only when its history is no longer
+needed.
+
+## Storage and configuration
+
+Nebular stores its database and transient per-session state under:
+
+```text
+~/.nebular/
+├── metrics.db
+├── reports/
+└── state/
+```
+
+`reports/` is created on demand for preferred HTML and PDF output. Other
+preferred formats use stdout unless `--output` is given.
+
+Set `NEBULAR_HOME` to use another location:
+
+```sh
+NEBULAR_HOME="$HOME/.local/share/nebular" nebular report
+```
+
+Database schema is created and seeded on first command execution, including
+commands such as `report` and `metrics list`.
+
+### Language selection
+
+Commands that produce user-facing output accept `--lang en` or `--lang es`.
+Resolution order is explicit option, current session language, `NEBULAR_LANG`,
+then English. An explicit language on a session command is persisted under
+`state/` for later hook output. Catalogs are complete and embedded; unknown
+language codes fail instead of mixing languages or silently falling back.
+
+## Turn lifecycle
+
+Normal operation follows this order:
+
+1. Host sends `user-prompt-submit`; Nebular opens a turn, counts prompt words,
+   and records heuristic `u2a` values.
+2. Agent runs `log-start`; Nebular attaches estimate, keywords, optional task
+   metadata, and model-provided `u2a` scores to that open turn.
+3. Agent completes work and runs `tips` to compare the current prompt with its
+   recent same-session baseline.
+4. Agent writes one live tip only when that gate is on, then runs `log-end`;
+   Nebular records model-provided `a2u` scores, optional outcome, and tip.
+5. Host sends `stop`; Nebular records actual elapsed time, estimate ratio,
+   response word count, heuristic `a2u` values, request/agent activity, and
+   closes turn.
+
+Intermediate stops refresh metrics without closing a turn that has not reached
+`log-end`. If `log-end` never arrives, the next prompt recovers the previous
+turn at its last stop before opening the next one. Internal subagent messages
+are ignored as user prompts. Where host payloads provide the data, Nebular also
+captures repository, branch, ticket, model, blocked time, and subagent
+transcript activity.
+
+Example manual lifecycle:
+
+```sh
+SCORES='{"ambiguity":10,"idea_branching":10,"idea_dispersion":10,"context_gap":10,"explanation_gap":10,"argument_gap":10,"lucidity_deficit":10,"structural_complexity":10,"opacity":10,"certainty_deficit":10}'
+
+printf '%s' '{"session_id":"demo","prompt":"Explain the release process"}' \
+  | nebular hook user-prompt-submit
+
+nebular log-start --session demo --estimate 120 \
+  --keywords 'release,documentation' --type explain --u2a "$SCORES"
+
+nebular tips --session demo
+nebular log-end --session demo --outcome completed --a2u "$SCORES"
+
+printf '%s' '{"session_id":"demo","last_assistant_message":"Release explained."}' \
+  | nebular hook stop
+```
+
+Each score object must contain all ten documented keys. Values are numeric and
+clamped to range 0 through 100.
+
+## Command reference
+
+Run `nebular help <COMMAND>` for generated help. Global options are
+`-h, --help` and `-V, --version`.
+
+### `nebular hook <EVENT>`
+
+Reads one host event as JSON from standard input.
+
+Events:
+
+- `user-prompt-submit` opens turn and emits JSON containing additional agent
+  context.
+- `stop` finalizes a model-closed turn and emits compact `systemMessage`.
+- `notification` records the start of permission waits when the host payload
+  identifies a permission prompt; other notification types are ignored.
+
+Hook-processing errors are printed as `nebular hook error: ...` without failing
+host event. Initialization errors occurring before event processing still
+return non-zero exit status.
+
+### `nebular log-start`
+
+```text
+nebular log-start --estimate <SECONDS> --keywords <CSV> --u2a <JSON>
+                  [--type <TYPE>] [--clarifying <COUNT>]
+                  [--correction <0|1>] [--session <ID>] [--lang <en|es>]
+```
+
+Records agent estimates and model scores on existing open turn. Keywords are
+trimmed, converted to lowercase, and stored individually. `--correction` is
+applied to preceding turn when one exists. Without `--session`, Nebular uses
+most recently started open turn.
+
+`--estimate` must be a finite number greater than zero and `--clarifying`
+must be a non-negative integer.
+
+Success output resembles `turn 2 logged`. It fails when no open turn exists or
+when `--u2a` is invalid JSON or omits a required score.
+
+### `nebular log-end`
+
+```text
+nebular log-end --a2u <JSON> [--outcome <LABEL>] [--tip <TEXT>]
+                [--session <ID>] [--lang <en|es>]
+```
+
+Records model `a2u` scores for open turn and marks model-side work complete.
+Tips must be agent-written, direct actions of at most 90 characters. Overlong
+tips fail and are never truncated. They remain in transient session state, not
+the metrics database. The stop hook displays a tip only when the current
+prompt's `u2a` is worse than its recent same-session baseline; otherwise it
+discards the tip. Run `tips` immediately before `log-end` to apply that gate.
+Host `stop` event performs final timing and closure.
+
+Success output resembles `turn 2 closed by model`. Error conditions match
+`log-start` for open-turn selection and score parsing.
+
+### `nebular report`
+
+```text
+nebular report [u2a|a2u] [--days <DAYS>] [--keyword <KEYWORD>]
+               [--repo <REPO>] [--recs <JSON_OR_FILE>]
+               [--format <md|html|json|csv|pdf>] [-o|--output <PATH>]
+               [--export <md|html|json|csv|pdf>] [--lang <en|es>]
+```
+
+Without a format option, the command prints the complete Markdown report to
+stdout. Scope `u2a` or `a2u` limits profiles and recommendations to that
+direction. `--days`, `--keyword`, and `--repo` restrict every report section to
+matching turns. With no rows, output is `no data`.
+
+`--format` is the preferred interface. Markdown, structured JSON, and tidy CSV
+go to stdout by default. Standalone HTML and portable PDF always create local
+files, defaulting to safe timestamped names under `~/.nebular/reports` (or
+`$NEBULAR_HOME/reports`). `-o`/`--output` selects an exact destination for any
+format; with no format it writes Markdown. HTML is self-contained with
+light/dark styling. PDF is generated without a browser or network. CSV uses:
+
+```text
+section,direction,item,label,measure,value,text
+```
+
+Fields that begin with spreadsheet formula prefixes are neutralized.
+
+`--export` is a compatibility alias. It writes every format to a timestamped
+file in the current directory when `--output` is omitted. Supplying different
+values to `--format` and `--export` fails. Explicit and generated paths never
+overwrite existing files.
+
+Recommendations are written by the agent, not synthesized by the CLI. Run
+`nebular tips --both`, derive concrete actions, and pass inline JSON or a local
+JSON file through `--recs`:
+
+```json
+{"you":["Use one exact target"],"me":["Lead with the result"],"both":["Confirm scope early"]}
+```
+
+Without `--recs`, the report contains a localized note that recommendations
+were not supplied. Direction-scoped reports emit only relevant groups; SWOT
+remains computed from numeric rules.
+
+```sh
+nebular report --days 30 --format html
+nebular report u2a --keyword rust --format json -o u2a-rust.json
+nebular report --repo owner/nebular --format pdf --lang es
+nebular report --format md --recs recommendations.json
+nebular report --export html # compatibility: writes in current directory
+```
+
+### `nebular metrics list`
+
+```text
+nebular metrics [--lang <en|es>] list
+```
+
+Lists metric key, category, unit, whether lower or higher values are better,
+parent, weight, and directional flag. Initial catalog contains core execution
+metrics, aggregate `nebulosity` metric, and all ten clarity dimensions. Stable
+database keys remain unchanged across languages.
+
+### `nebular metrics add`
+
+```text
+nebular metrics [--lang <en|es>] add <KEY> <NAME> <CATEGORY> <UNIT> <BETTER>
+                    [--parent <KEY>] [--weight <NUMBER>]
+                    [--aggregation <NAME>] [--directional]
+```
+
+Adds metric definition. `<BETTER>` must be `lower` or `higher`. Default weight
+is `1` and must be finite and non-negative; default aggregation is `sum`.
+Parent key must already exist. Nebular reports `metric <KEY> added` on success
+and returns database error for duplicate key.
+
+### `nebular tips`
+
+```text
+nebular tips [--share <NUMBER>] [--both] [--all]
+             [--session <ID>] [--lang <en|es>]
+```
+
+Prints numeric evidence for live agent-written guidance; it does not generate
+advice. The first line reports whether the current prompt's `u2a` is worse than
+the recent same-session baseline (`gate_on`) or not (`gate_off`). For each
+sub-metric, output includes recent window, earlier baseline, delta, and last
+turn.
+
+Default window is the latest 30% of scored turns in the selected conversation.
+`--share` accepts a finite value and is clamped to `0.3..1.0`; `--both` includes
+`a2u`; `--all` uses scored turns across all sessions; `--session` selects a
+known session rather than the latest active/recent one. Use the output to write
+one direct, session-language tip of at most 90 characters only while gate is
+on.
+
+### `nebular estimate`
+
+```text
+nebular estimate --keywords <CSV> [--lang <en|es>]
+```
+
+Matches normalized keywords against historical turns and prints match count,
+weighted estimate, median, p90, and prior estimate ratio when available. It
+reports that no history matches instead of inventing an estimate.
+
+### `nebular calibrate`
+
+```text
+nebular calibrate [--min-samples <COUNT>] [--lang <en|es>]
+```
+
+Fits a least-squares mapping from heuristic to model values for every clarity
+dimension and direction. Default minimum is 20 paired samples. Raw heuristic
+values remain unchanged; reporting views apply calibration when read. The
+minimum sample count must be at least one.
+
+### `nebular fit`
+
+```text
+nebular fit [--min-samples <COUNT>] [--dry-run] [--lang <en|es>]
+```
+
+Reconstructs message text from locally available supported transcripts in
+memory, extracts linguistic features, and evaluates ridge models with five-fold
+cross-validation. Default minimum is 40 samples. A model is adopted only when
+its validation correlation clears the quality threshold and beats the existing
+rule. A non-dry run recomputes heuristic values for matched historical turns
+and resets calibration; transcript text and feature vectors are not persisted.
+The minimum sample count must be at least one.
+
+### `nebular import`
+
+```text
+nebular import [--sessions <COUNT>] [--exclude <ID> ...]
+               [--dump <PATH>] [--lang <en|es>]
+```
+
+Discovers recent Claude-compatible project transcripts and Codex session
+transcripts recursively under `${CLAUDE_CONFIG_DIR:-~/.claude}/projects` and
+`${CODEX_HOME:-~/.codex}/sessions`, skips excluded or already imported
+sessions, and reconstructs sessions, turns, context, usage, timing, heuristic
+clarity values, corrections, and fallback keywords. Set
+`NEBULAR_TRANSCRIPTS` to an operating-system path list to replace both discovery
+roots. Default limit is 10 sessions. Claude subagent activity is folded into its
+parent session; subagent transcript files are not imported as separate sessions.
+The session limit must be at least one.
+
+Text is processed only in memory. When requested, `--dump` writes schema
+`nebular.safe-import-dump.v1` with safe turn/session identifiers, timestamps,
+word/request/agent counts, keywords, and heuristic scores; it never includes
+prompt or answer content. Treat the dump as local workflow data and remove it
+when no longer needed.
+
+### `nebular import-scores`
+
+```text
+nebular import-scores <FILE> [--lang <en|es>]
+```
+
+Reads a JSON array whose rows contain `turn_id` and may contain complete `u2a`
+or `a2u` score objects, `keywords`, `task_type`, `clarifying_questions`, and
+`corrects_previous`. It validates scores like `log-start`/`log-end`, updates
+known imported turns, and skips unknown turn IDs.
+
+## Report contents and schema
+
+The full report contains an introduction and scale, execution/usage summary,
+first-half versus second-half trends, model-versus-heuristic bias, keyword
+analysis, a profile for each selected direction, rule-based SWOT analysis, and
+agent-supplied recommendations for user, agent, and both sides. Without
+`--recs`, it records that recommendations are missing. Direction-specific
+reports omit unrelated profiles and recommendation groups.
+
+One typed report model feeds Markdown, HTML, JSON, CSV, and PDF so filters,
+scope, labels, measurements, and recommendations stay consistent across
+formats.
+
+Core tables are `sessions`, `turns`, `keywords`, `turn_keywords`,
+`metric_definitions`, and `metric_values`. Learned ridge coefficients and
+linear calibration are stored separately. `v_turn_summary`, `v_nebulosity`,
+`v_keyword_stats`, and `v_bias` expose reporting data without altering raw
+metric values. Schema setup is additive so existing databases retain history.
+
+## Errors and troubleshooting
+
+- `no open turn ...`: ensure `user-prompt-submit` hook opened same session
+  before `log-start` or `log-end`.
+- `--u2a must be JSON` or `--a2u must be JSON`: pass one valid JSON object as
+  single shell argument.
+- `--u2a missing: <key>` or `--a2u missing: <key>`: include all ten clarity
+  dimensions.
+- Unknown language: use `en` or `es`, or correct `NEBULAR_LANG`.
+- Fit/import finds no transcript samples: confirm supported host history exists
+  in its standard or configured home and that session identifiers match.
+- Recommendation JSON fails: pass an object containing only `you`, `me`, and
+  `both` string arrays, or a readable local file containing that object.
+- Tip is rejected: keep it to one direct action of 90 characters or fewer.
+- Export path exists: choose another `--output`; Nebular never overwrites it.
+- Installer checksum errors: do not bypass verification; confirm archive and
+  `SHA256SUMS` come from same release.
+- `nebular: command not found`: add selected `--bin-dir` to `PATH`.
+
+For machine-generated syntax, use:
+
+```sh
+nebular --help
+nebular help log-start
+nebular metrics add --help
+sh install.sh --help
+```
