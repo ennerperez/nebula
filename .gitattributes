@@ -1,0 +1,31 @@
+# Normalize text files across development and release platforms.
+* text=auto eol=lf
+
+# Source, manifests, configuration, documentation, and automation.
+*.rs text eol=lf
+*.toml text eol=lf
+*.lock text eol=lf
+*.md text eol=lf
+*.json text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.sh text eol=lf
+*.ps1 text eol=lf
+
+# Windows command scripts require CRLF for broad cmd.exe compatibility.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Binary artifacts must never undergo line-ending conversion.
+*.7z binary
+*.dll binary
+*.exe binary
+*.gif binary
+*.gz binary
+*.ico binary
+*.jpg binary
+*.jpeg binary
+*.pdf binary
+*.png binary
+*.tar binary
+*.zip binary
