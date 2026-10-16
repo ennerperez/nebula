@@ -1,0 +1,135 @@
+name: Release CLI
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing version tag to release (for example, v0.1.0)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+
+jobs:
+  package-cli:
+    name: Package ${{ matrix.target }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            target: x86_64-unknown-linux-gnu
+            archive: nebular-linux-x86_64.tar.gz
+            format: tar
+          - runner: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+            archive: nebular-linux-aarch64.tar.gz
+            format: tar
+          - runner: macos-15-intel
+            target: x86_64-apple-darwin
+            archive: nebular-macos-x86_64.tar.gz
+            format: tar
+          - runner: macos-15
+            target: aarch64-apple-darwin
+            archive: nebular-macos-aarch64.tar.gz
+            format: tar
+          - runner: windows-2025
+            target: x86_64-pc-windows-msvc
+            archive: nebular-windows-x86_64.zip
+            format: zip
+          - runner: windows-11-arm
+            target: aarch64-pc-windows-msvc
+            archive: nebular-windows-aarch64.zip
+            format: zip
+
+    steps:
+      - name: Check out release tag
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+          persist-credentials: false
+
+      - name: Install stable Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Build CLI
+        run: cargo build --release --locked --bin nebular --target "${{ matrix.target }}"
+
+      - name: Package CLI
+        if: matrix.format == 'tar'
+        shell: bash
+        run: |
+          mkdir -p package/skills package/docs package/locales dist
+          cp "target/${{ matrix.target }}/release/nebular" package/nebular
+          cp README.md LICENSE package/
+          cp docs/*.md package/docs/
+          cp locales/en.json locales/es.json package/locales/
+          cp -R skills/nebular package/skills/nebular
+          test -f package/skills/nebular/SKILL.md
+          test -f package/skills/nebular/agents/openai.yaml
+          test -f package/docs/ARCHITECTURE.md
+          test -f package/docs/CLI.md
+          test -f package/docs/STACK.md
+          test -f package/locales/en.json
+          test -f package/locales/es.json
+          tar -C package -czf "dist/${{ matrix.archive }}" nebular README.md LICENSE docs locales skills
+
+      - name: Package CLI
+        if: matrix.format == 'zip'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path package, dist
+          Copy-Item "target/${{ matrix.target }}/release/nebular.exe" package/nebular.exe
+          Copy-Item README.md, LICENSE package/
+          New-Item -ItemType Directory -Path package/skills, package/docs, package/locales
+          Copy-Item docs/*.md package/docs/
+          Copy-Item locales/en.json, locales/es.json package/locales/
+          Copy-Item -Recurse skills/nebular package/skills/nebular
+          if (-not (Test-Path package/skills/nebular/SKILL.md)) { throw "missing skill" }
+          if (-not (Test-Path package/skills/nebular/agents/openai.yaml)) { throw "missing OpenAI skill metadata" }
+          if (-not (Test-Path package/docs/ARCHITECTURE.md)) { throw "missing architecture docs" }
+          if (-not (Test-Path package/docs/CLI.md)) { throw "missing CLI docs" }
+          if (-not (Test-Path package/docs/STACK.md)) { throw "missing stack docs" }
+          if (-not (Test-Path package/locales/en.json)) { throw "missing English catalog" }
+          if (-not (Test-Path package/locales/es.json)) { throw "missing Spanish catalog" }
+          Compress-Archive -Path package/nebular.exe, package/README.md, package/LICENSE, package/docs, package/locales, package/skills -DestinationPath "dist/${{ matrix.archive }}"
+
+      - name: Upload package
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.archive }}
+          path: dist/${{ matrix.archive }}
+          if-no-files-found: error
+
+  release:
+    name: Publish GitHub Release
+    needs: package-cli
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download packages
+        uses: actions/download-artifact@v8
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Generate checksums
+        working-directory: dist
+        run: sha256sum nebular-* > SHA256SUMS
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$RELEASE_TAG" dist/* --verify-tag --generate-notes
