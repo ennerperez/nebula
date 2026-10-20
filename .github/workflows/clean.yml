@@ -1,0 +1,60 @@
+name: "Clean Repository"
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 1 * * *'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  remove:
+    name: Remove
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+      pull-requests: write
+      repository-projects: write
+      actions: write
+      issues: write
+    timeout-minutes: 10
+
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      OWNER: ${{ github.repository_owner }}
+      REPO: ${{ github.event.repository.name }}
+
+    steps:
+      - name: Automatic stale
+        uses: actions/stale@v11
+        with:
+          stale-issue-message: 'This issue is stale because it has been open for 30 days with no activity. Remove the stale label or leave a comment, or it will be closed in 5 days.'
+          stale-pr-message: 'This pull request is stale because it has been open for 45 days with no activity. Remove the stale label or leave a comment, or it will be closed in 10 days.'
+          close-issue-message: 'This issue was closed because it remained stale for 5 days with no activity.'
+          close-pr-message: 'This pull request was closed because it remained stale for 10 days with no activity.'
+          days-before-issue-stale: 30
+          days-before-pr-stale: 45
+          days-before-issue-close: 5
+          days-before-pr-close: 10
+      - name: Artifacts (>1 day)
+        uses: c-hive/gha-remove-artifacts@v1
+        with:
+          age: '1 day' # '<number> <unit>', e.g. 5 days, 2 years, 90 seconds, parsed by Moment.js
+          # Optional inputs
+          # skip-tags: true
+          skip-recent: 1
+      - name: Workflows (>28 days)
+        run: |
+          sudo apt-get install jq
+          gh run list --limit 200 --json databaseId,createdAt |
+          jq -r '[.[] | select((now - (.createdAt | fromdateiso8601)) > (28 * 24 * 60 * 60))] | .[].databaseId' |
+          xargs -I ID gh run delete ID
+      - name: Workflows (Failed)
+        run: |
+          sudo apt-get install jq
+          gh run list --limit 200 --json databaseId,status,conclusion |
+          jq -r '[.[] | select(.status == "completed" and .conclusion == "failure")] | .[].databaseId' |
+          xargs -I ID gh run delete ID
