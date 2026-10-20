@@ -587,11 +587,10 @@ fn summary(
     let estimate = get_metric(connection, turn, "estimated_seconds")?;
     let real = get_metric(connection, turn, "real_seconds")?;
     let ratio = get_metric(connection, turn, "estimate_ratio")?;
-    let profile = |direction: &str| -> Result<String> {
-        Ok(format!(
-            "{}/{}h",
+    let profile = |direction: &str| -> Result<(String, String)> {
+        Ok((
             neb(nebulosity(connection, turn, direction, "model")?),
-            neb(nebulosity(connection, turn, direction, "heuristic")?)
+            neb(nebulosity(connection, turn, direction, "heuristic")?),
         ))
     };
     let line1 = localizer.format(
@@ -615,11 +614,15 @@ fn summary(
     let suffix = tip.map_or_else(String::new, |tip| {
         localizer.format("summary.tip", &[("tip", tip.to_owned())])
     });
+    let (u2a, u2a_h) = profile("u2a")?;
+    let (a2u, a2u_h) = profile("a2u")?;
     let line2 = localizer.format(
         "summary.line2",
         &[
-            ("u2a", profile("u2a")?),
-            ("a2u", profile("a2u")?),
+            ("u2a", u2a),
+            ("u2a_h", u2a_h),
+            ("a2u", a2u),
+            ("a2u_h", a2u_h),
             (
                 "clar",
                 compact(Some(
@@ -648,6 +651,9 @@ mod tests {
     static NEXT: AtomicU64 = AtomicU64::new(0);
     fn english() -> Localizer {
         Localizer::load(crate::i18n::Lang::En).unwrap()
+    }
+    fn spanish() -> Localizer {
+        Localizer::load(crate::i18n::Lang::Es).unwrap()
     }
     fn setup(name: &str) -> (App, Connection, PathBuf) {
         let root = std::env::temp_dir().join(format!(
@@ -713,6 +719,43 @@ mod tests {
             Some("agent tip".into())
         );
         assert_eq!(turn_tip(&connection, worse, None).unwrap(), None);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn summary_uses_readable_labels_and_direction_suffixes() {
+        let (_, connection, root) = setup("summary-format");
+        let turn = scored_turn(&connection, 1, 3.4);
+        for key in KEYS {
+            put_metric(&connection, turn, key, 12.0, "heuristic", Some("u2a")).unwrap();
+            put_metric(&connection, turn, key, 1.0, "model", Some("a2u")).unwrap();
+            put_metric(&connection, turn, key, 8.0, "heuristic", Some("a2u")).unwrap();
+        }
+        for (key, value) in [
+            ("estimated_seconds", 45.0),
+            ("real_seconds", 38.0),
+            ("estimate_ratio", 0.84),
+            ("server_requests", 3.0),
+            ("words_in", 8.0),
+            ("words_out", 96.0),
+            ("agents", 0.0),
+            ("clarifying_questions", 0.0),
+            ("corrections", 0.0),
+        ] {
+            put_metric(&connection, turn, key, value, "hook", None).unwrap();
+        }
+
+        assert_eq!(
+            summary(
+                &connection,
+                turn,
+                Some("Indica archivo y resultado esperado."),
+                &spanish(),
+            )
+            .unwrap(),
+            "⏱ est 45s / real 38s (0.84x) · pet.: 3 · palabras: 8u / 96a · agentes: 0\n\
+🌫 u2a 3.4 / (12 heur.) · a2u 1 / (8 heur.) · aclaraciones: 0 · correcciones: 0 · consejo: Indica archivo y resultado esperado."
+        );
         fs::remove_dir_all(root).unwrap();
     }
 
