@@ -11,6 +11,14 @@ pub(crate) struct Cli {
 
 #[derive(Subcommand)]
 pub(crate) enum Cmd {
+    Configure {
+        #[command(subcommand)]
+        cmd: ConfigureCmd,
+    },
+    Data {
+        #[command(subcommand)]
+        cmd: DataCmd,
+    },
     Hook {
         #[arg(value_enum)]
         event: Event,
@@ -114,6 +122,26 @@ pub(crate) enum Cmd {
     },
     ImportScores {
         file: PathBuf,
+        #[arg(long, value_enum)]
+        lang: Option<Lang>,
+    },
+}
+
+#[derive(Subcommand)]
+pub(crate) enum ConfigureCmd {
+    Claude {
+        #[arg(long, value_name = "PATH")]
+        settings: PathBuf,
+        #[arg(long, value_name = "PATH")]
+        binary: PathBuf,
+    },
+}
+
+#[derive(Subcommand)]
+pub(crate) enum DataCmd {
+    Clear {
+        #[arg(long, help = "Confirm permanent deletion of all Nebula-managed data")]
+        yes: bool,
         #[arg(long, value_enum)]
         lang: Option<Lang>,
     },
@@ -291,6 +319,34 @@ mod tests {
 
     #[test]
     fn cli_parses_nested_and_value_enum_commands() {
+        let configure = Cli::try_parse_from([
+            "nebula",
+            "configure",
+            "claude",
+            "--settings",
+            "/tmp/claude/settings.json",
+            "--binary",
+            "/opt/nebula/bin/nebula",
+        ])
+        .unwrap();
+        assert!(matches!(
+            configure.cmd,
+            Cmd::Configure {
+                cmd: ConfigureCmd::Claude { settings, binary }
+            } if settings == PathBuf::from("/tmp/claude/settings.json")
+                && binary == PathBuf::from("/opt/nebula/bin/nebula")
+        ));
+        let data =
+            Cli::try_parse_from(["nebula", "data", "clear", "--yes", "--lang", "es"]).unwrap();
+        assert!(matches!(
+            data.cmd,
+            Cmd::Data {
+                cmd: DataCmd::Clear {
+                    yes: true,
+                    lang: Some(Lang::Es)
+                }
+            }
+        ));
         let hook =
             Cli::try_parse_from(["nebula", "hook", "user-prompt-submit", "--lang", "es"]).unwrap();
         assert!(matches!(

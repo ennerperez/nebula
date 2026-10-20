@@ -1,11 +1,16 @@
 use crate::{db, i18n::Lang};
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, bail};
 use rusqlite::Connection;
 use serde_json::{Map, Value};
 use std::{fs, path::PathBuf};
 
 pub(crate) struct App {
     home: PathBuf,
+}
+
+#[derive(Debug)]
+pub(crate) struct ClearResult {
+    pub(crate) removed_paths: usize,
 }
 
 impl App {
@@ -27,6 +32,63 @@ impl App {
 
     pub(crate) fn reports_dir(&self) -> PathBuf {
         self.home.join("reports")
+    }
+
+    pub(crate) fn home(&self) -> &std::path::Path {
+        &self.home
+    }
+
+    pub(crate) fn clear_data(&self) -> Result<ClearResult> {
+        let metadata = match fs::metadata(&self.home) {
+            Ok(metadata) => metadata,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                return Ok(ClearResult { removed_paths: 0 });
+            }
+            Err(error) => return Err(error).context("cannot inspect Nebula data directory"),
+        };
+        if !metadata.is_dir() {
+            bail!(
+                "Nebula data path is not a directory: {}",
+                self.home.display()
+            );
+        }
+        let canonical =
+            fs::canonicalize(&self.home).context("cannot resolve Nebula data directory")?;
+        if canonical.parent().is_none() {
+            bail!(
+                "refusing to clear a filesystem root: {}",
+                canonical.display()
+            );
+        }
+
+        let mut removed_paths = 0;
+        for name in [
+            "metrics.db",
+            "metrics.db-wal",
+            "metrics.db-shm",
+            "metrics.db-journal",
+            "state",
+            "reports",
+        ] {
+            let path = self.home.join(name);
+            let metadata = match fs::symlink_metadata(&path) {
+                Ok(metadata) => metadata,
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
+                Err(error) => {
+                    return Err(error)
+                        .with_context(|| format!("cannot inspect {}", path.display()));
+                }
+            };
+            if metadata.file_type().is_dir() && !metadata.file_type().is_symlink() {
+                fs::remove_dir_all(&path)
+                    .with_context(|| format!("cannot remove {}", path.display()))?;
+            } else {
+                fs::remove_file(&path)
+                    .with_context(|| format!("cannot remove {}", path.display()))?;
+            }
+            removed_paths += 1;
+        }
+        Ok(ClearResult { removed_paths })
     }
 
     #[cfg(test)]
@@ -145,5 +207,80 @@ mod tests {
             22
         );
         fs::remove_dir_all(&app.home).unwrap();
+    }
+
+    #[test]
+    fn clear_data_removes_only_managed_paths_and_is_idempotent() {
+        let app = test_app();
+        let connection = app.db().unwrap();
+        drop(connection);
+        app.save_state("session-1", &Map::new()).unwrap();
+        fs::create_dir_all(app.reports_dir()).unwrap();
+        fs::write(app.reports_dir().join("report.html"), "report").unwrap();
+        for sidecar in ["metrics.db-wal", "metrics.db-shm", "metrics.db-journal"] {
+            fs::write(app.home.join(sidecar), sidecar).unwrap();
+        }
+        fs::write(app.home.join("keep.txt"), "keep").unwrap();
+
+        let result = app.clear_data().unwrap();
+        assert_eq!(result.removed_paths, 6);
+        assert!(app.home.exists());
+        assert_eq!(
+            fs::read_to_string(app.home.join("keep.txt")).unwrap(),
+            "keep"
+        );
+        for name in [
+            "metrics.db",
+            "metrics.db-wal",
+            "metrics.db-shm",
+            "metrics.db-journal",
+            "state",
+            "reports",
+        ] {
+            assert!(!app.home.join(name).exists());
+        }
+        assert_eq!(app.clear_data().unwrap().removed_paths, 0);
+        fs::remove_dir_all(&app.home).unwrap();
+    }
+
+    #[test]
+    fn clear_data_does_not_create_a_missing_home() {
+        let app = test_app();
+        assert!(!app.home.exists());
+        assert_eq!(app.clear_data().unwrap().removed_paths, 0);
+        assert!(!app.home.exists());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn clear_data_unlinks_managed_symlinks_without_following_them() {
+        use std::os::unix::fs::symlink;
+
+        let app = test_app();
+        let external = app.home.with_extension("external");
+        fs::create_dir_all(&app.home).unwrap();
+        fs::create_dir_all(&external).unwrap();
+        fs::write(external.join("keep.txt"), "keep").unwrap();
+        symlink(&external, app.home.join("state")).unwrap();
+
+        assert_eq!(app.clear_data().unwrap().removed_paths, 1);
+        assert_eq!(
+            fs::read_to_string(external.join("keep.txt")).unwrap(),
+            "keep"
+        );
+        fs::remove_dir_all(&app.home).unwrap();
+        fs::remove_dir_all(external).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn clear_data_rejects_filesystem_root() {
+        let app = App::for_test(PathBuf::from("/"));
+        assert!(
+            app.clear_data()
+                .unwrap_err()
+                .to_string()
+                .contains("filesystem root")
+        );
     }
 }

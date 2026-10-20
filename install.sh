@@ -10,8 +10,11 @@ BIN_DIR=${NEBULA_INSTALL_DIR:-${HOME:-}/.local/bin}
 AGENT_MODE=${NEBULA_AGENT:-auto}
 INSTALL_CLI=1
 INSTALL_SKILL=1
+INSTALL_HOOKS=1
+CLAUDE_SELECTED=0
 SKILL_ROOTS=
 TMP_DIR=
+INSTALLED_CLI=
 
 usage() {
     cat <<'EOF'
@@ -30,13 +33,15 @@ Options:
                          May be repeated.
   --no-cli               Do not install the CLI.
   --no-skill             Do not install the Agent Skill.
+  --no-hooks             Do not configure Claude Code lifecycle hooks.
   -h, --help             Show this help.
 
 Environment overrides:
   NEBULA_REPO, NEBULA_VERSION, NEBULA_INSTALL_DIR, NEBULA_AGENT
 
 The script downloads an archive and SHA256SUMS into a temporary directory,
-verifies the archive, then installs files. It never executes downloaded code.
+verifies the archive, installs files, then runs the installed CLI to verify it
+and configure supported host integrations.
 EOF
 }
 
@@ -77,7 +82,10 @@ add_agent() {
     agent=$1
     case "$agent" in
         codex) append_skill_root "${CODEX_HOME:-${HOME:-}/.codex}/skills" ;;
-        claude) append_skill_root "${CLAUDE_CONFIG_DIR:-${HOME:-}/.claude}/skills" ;;
+        claude)
+            append_skill_root "${CLAUDE_CONFIG_DIR:-${HOME:-}/.claude}/skills"
+            CLAUDE_SELECTED=1
+            ;;
         gemini) append_skill_root "${GEMINI_CLI_HOME:-${HOME:-}}/.gemini/skills" ;;
         opencode) append_skill_root "${XDG_CONFIG_HOME:-${HOME:-}/.config}/opencode/skills" ;;
         generic) append_skill_root "${HOME:-}/.agents/skills" ;;
@@ -125,6 +133,10 @@ while [ "$#" -gt 0 ]; do
             ;;
         --no-skill)
             INSTALL_SKILL=0
+            shift
+            ;;
+        --no-hooks)
+            INSTALL_HOOKS=0
             shift
             ;;
         -h|--help)
@@ -297,6 +309,10 @@ if [ "$INSTALL_CLI" -eq 1 ]; then
     INSTALLED_VERSION=$("$BIN_DIR/$BINARY" --version) || \
         die "installed CLI failed verification: $BIN_DIR/$BINARY"
     note "Verified CLI: $INSTALLED_VERSION"
+    case "$BIN_DIR" in
+        /*) INSTALLED_CLI="$BIN_DIR/$BINARY" ;;
+        *) INSTALLED_CLI="$(cd "$BIN_DIR" && pwd -P)/$BINARY" ;;
+    esac
     case ":${PATH:-}:" in
         *":$BIN_DIR:"*) ;;
         *) note "Add $BIN_DIR to PATH to run '$PROGRAM' from any directory." ;;
@@ -338,4 +354,24 @@ if [ "$INSTALL_SKILL" -eq 1 ]; then
         note "Installed Agent Skill: $destination"
     done
     IFS=$old_ifs
+fi
+
+if [ "$INSTALL_SKILL" -eq 1 ] && [ "$INSTALL_HOOKS" -eq 1 ] && [ "$CLAUDE_SELECTED" -eq 1 ]; then
+    hook_binary=$INSTALLED_CLI
+    if [ -z "$hook_binary" ] && command -v "$PROGRAM" >/dev/null 2>&1; then
+        discovered_binary=$(command -v "$PROGRAM")
+        hook_binary="$(cd "$(dirname "$discovered_binary")" && pwd -P)/$(basename "$discovered_binary")"
+    fi
+    if [ -n "$hook_binary" ]; then
+        claude_settings="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/settings.json"
+        if "$hook_binary" configure claude --help >/dev/null 2>&1; then
+            "$hook_binary" configure claude \
+                --settings "$claude_settings" \
+                --binary "$hook_binary"
+        else
+            note "Claude hooks were not configured because this Nebula version does not support automatic setup."
+        fi
+    else
+        note "Claude hooks were not configured because '$PROGRAM' is not installed or on PATH."
+    fi
 fi

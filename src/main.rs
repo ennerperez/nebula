@@ -9,24 +9,69 @@ mod export;
 mod hooks;
 mod i18n;
 mod import;
+mod integrations;
 mod learning;
 mod scoring;
 
 use crate::{
     app::App,
-    cli::{Cli, Cmd},
+    cli::{Cli, Cmd, ConfigureCmd, DataCmd},
     i18n::{Lang, Localizer},
 };
-use anyhow::Result;
+use anyhow::{Result, bail};
 use clap::Parser;
 use rusqlite::{Connection, OptionalExtension};
 use std::io::{self, Read};
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
+    if let Cmd::Configure { cmd } = &cli.cmd {
+        match cmd {
+            ConfigureCmd::Claude { settings, binary } => {
+                let result = integrations::configure_claude(settings, binary)?;
+                if result.changed {
+                    println!("Configured Claude hooks: {}", settings.display());
+                    if let Some(backup) = result.backup {
+                        println!("Backup: {}", backup.display());
+                    }
+                    println!("Restart Claude Code before expecting new turns to be recorded.");
+                } else {
+                    println!("Claude hooks already configured: {}", settings.display());
+                }
+            }
+        }
+        return Ok(());
+    }
     let app = App::new()?;
+    if let Cmd::Data { cmd } = &cli.cmd {
+        match cmd {
+            DataCmd::Clear { yes, lang } => {
+                let environment = std::env::var("NEBULA_LANG").ok();
+                let localizer = Localizer::resolve(*lang, None, environment.as_deref())?;
+                if !yes {
+                    bail!(localizer.text("data.confirmation"));
+                }
+                let result = app.clear_data()?;
+                let path = app.home().display().to_string();
+                if result.removed_paths == 0 {
+                    println!("{}", localizer.format("data.empty", &[("path", path)]));
+                } else {
+                    println!(
+                        "{}",
+                        localizer.format(
+                            "data.cleared",
+                            &[("count", result.removed_paths.to_string()), ("path", path),],
+                        )
+                    );
+                }
+            }
+        }
+        return Ok(());
+    }
     let connection = app.db()?;
     match cli.cmd {
+        Cmd::Configure { .. } => unreachable!("handled before database initialization"),
+        Cmd::Data { .. } => unreachable!("handled before database initialization"),
         Cmd::Hook { event, lang } => {
             let mut input = String::new();
             io::stdin().read_to_string(&mut input)?;
