@@ -1,4 +1,5 @@
 use crate::{
+    cli::TranscriptHost,
     db::{add_keywords, put_metric},
     i18n::Localizer,
     learning::learned_heuristic,
@@ -16,7 +17,9 @@ use serde::Serialize;
 use serde_json::Value;
 use std::{
     collections::{BTreeMap, BTreeSet, HashSet},
-    env, fs,
+    env,
+    ffi::OsString,
+    fs,
     path::{Path, PathBuf},
     process::Command,
 };
@@ -89,16 +92,11 @@ pub(crate) fn import_sessions(
     sessions: usize,
     exclude: &[String],
     dump: Option<&Path>,
+    host: Option<TranscriptHost>,
     localizer: &Localizer,
 ) -> Result<()> {
-    let summary = import_with_roots(
-        connection,
-        sessions,
-        exclude,
-        dump,
-        localizer,
-        &transcript_roots(),
-    )?;
+    let roots = transcript_roots(host, localizer)?;
+    let summary = import_with_roots(connection, sessions, exclude, dump, localizer, &roots)?;
     println!(
         "{}",
         localizer.format(
@@ -559,23 +557,72 @@ fn apply_scores(
     Ok((scored, skipped))
 }
 
-fn transcript_roots() -> Vec<PathBuf> {
+fn transcript_roots(host: Option<TranscriptHost>, localizer: &Localizer) -> Result<Vec<PathBuf>> {
     if let Some(value) = env::var_os("NEBULA_TRANSCRIPTS") {
-        return env::split_paths(&value).collect();
+        return Ok(env::split_paths(&value).collect());
     }
     let Some(home) = dirs::home_dir() else {
-        return Vec::new();
+        return Err(anyhow!(localizer.text("import.ambiguous_host")));
     };
-    vec![
-        env::var_os("CLAUDE_CONFIG_DIR")
-            .map(PathBuf::from)
-            .unwrap_or_else(|| home.join(".claude"))
-            .join("projects"),
-        env::var_os("CODEX_HOME")
-            .map(PathBuf::from)
-            .unwrap_or_else(|| home.join(".codex"))
-            .join("sessions"),
-    ]
+    transcript_roots_for(
+        host,
+        env::var_os("CLAUDE_CONFIG_DIR"),
+        env::var_os("CLAUDECODE").is_some(),
+        env::var_os("CODEX_HOME"),
+        env::var_os("CODEX_THREAD_ID").is_some() || env::var_os("CODEX_SESSION_ID").is_some(),
+        &home,
+    )
+    .ok_or_else(|| anyhow!(localizer.text("import.ambiguous_host")))
+}
+
+fn transcript_roots_for(
+    host: Option<TranscriptHost>,
+    claude_config: Option<OsString>,
+    claude_active: bool,
+    codex_home: Option<OsString>,
+    codex_active: bool,
+    home: &Path,
+) -> Option<Vec<PathBuf>> {
+    if let Some(host) = host {
+        return Some(match host {
+            TranscriptHost::Claude => vec![
+                claude_config
+                    .map(PathBuf::from)
+                    .unwrap_or_else(|| home.join(".claude"))
+                    .join("projects"),
+            ],
+            TranscriptHost::Codex => vec![
+                codex_home
+                    .map(PathBuf::from)
+                    .unwrap_or_else(|| home.join(".codex"))
+                    .join("sessions"),
+            ],
+        });
+    }
+    if claude_active && codex_active {
+        return None;
+    }
+    if codex_active {
+        return Some(vec![
+            codex_home
+                .map(PathBuf::from)
+                .unwrap_or_else(|| home.join(".codex"))
+                .join("sessions"),
+        ]);
+    }
+    if claude_active {
+        return Some(vec![
+            claude_config
+                .map(PathBuf::from)
+                .unwrap_or_else(|| home.join(".claude"))
+                .join("projects"),
+        ]);
+    }
+    match (claude_config, codex_home) {
+        (Some(path), None) => Some(vec![PathBuf::from(path).join("projects")]),
+        (None, Some(path)) => Some(vec![PathBuf::from(path).join("sessions")]),
+        (Some(_), Some(_)) | (None, None) => None,
+    }
 }
 
 fn transcript_files(roots: &[PathBuf]) -> Result<Vec<PathBuf>> {
@@ -948,6 +995,56 @@ mod tests {
         Localizer::load(Lang::En).unwrap()
     }
 
+    #[test]
+    fn transcript_roots_scope_discovery_to_active_host_and_profile() {
+        let home = Path::new("/home/test");
+        assert_eq!(
+            transcript_roots_for(
+                None,
+                Some("/profiles/alt".into()),
+                true,
+                Some("/profiles/codex".into()),
+                true,
+                home,
+            ),
+            None
+        );
+        assert_eq!(
+            transcript_roots_for(None, Some("/profiles/alt".into()), true, None, false, home,),
+            Some(vec![PathBuf::from("/profiles/alt/projects")])
+        );
+        assert_eq!(
+            transcript_roots_for(None, None, true, None, false, home),
+            Some(vec![PathBuf::from("/home/test/.claude/projects")])
+        );
+        assert_eq!(
+            transcript_roots_for(
+                None,
+                None,
+                false,
+                Some("/profiles/codex".into()),
+                true,
+                home,
+            ),
+            Some(vec![PathBuf::from("/profiles/codex/sessions")])
+        );
+        assert_eq!(
+            transcript_roots_for(None, None, false, None, false, home),
+            None
+        );
+        assert_eq!(
+            transcript_roots_for(
+                Some(TranscriptHost::Claude),
+                Some("/profiles/alt".into()),
+                false,
+                Some("/profiles/codex".into()),
+                true,
+                home,
+            ),
+            Some(vec![PathBuf::from("/profiles/alt/projects")])
+        );
+    }
+
     fn scores(value: f64) -> Value {
         Value::Object(
             crate::scoring::KEYS
@@ -1035,6 +1132,54 @@ mod tests {
         assert!(!dump_text.contains("private widget"));
         assert!(!dump_text.contains("Done privately"));
         assert!(dump_text.contains("nebula.safe-import-dump.v1"));
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn claude_import_handles_inverted_punctuation_in_prompt_and_answer() {
+        let root = fixture();
+        let path = root.join("unicode-session.jsonl");
+        let lines = [
+            json!({"timestamp":"2026-01-01T00:00:00Z","type":"user","cwd":root,"message":{"content":"¿Puedes revisar esta sesión?"}}),
+            json!({"timestamp":"2026-01-01T00:00:01Z","type":"assistant","requestId":"r1","message":{"model":"claude-test","content":[{"type":"text","text":"¡Sí! Quedó corregida."}]}}),
+        ];
+        fs::write(
+            &path,
+            lines
+                .iter()
+                .map(Value::to_string)
+                .collect::<Vec<_>>()
+                .join("\n"),
+        )
+        .unwrap();
+
+        let connection = database();
+        let result = import_with_roots(
+            &connection,
+            1,
+            &[],
+            None,
+            &english(),
+            std::slice::from_ref(&root),
+        )
+        .unwrap();
+
+        assert_eq!(
+            result,
+            ImportSummary {
+                sessions: 1,
+                turns: 1,
+                skipped: 0
+            }
+        );
+        let turns: i64 = connection
+            .query_row(
+                "SELECT COUNT(*) FROM turns WHERE session_id='unicode-session'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(turns, 1);
         fs::remove_dir_all(root).unwrap();
     }
 

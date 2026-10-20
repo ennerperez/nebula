@@ -222,10 +222,11 @@ fn sentences(input: &str) -> Vec<&str> {
     let mut start = 0;
     for (index, character) in input.char_indices() {
         if matches!(character, '.' | '!' | '?' | '¿' | '¡' | '\n') {
-            if WORD.is_match(&input[start..=index]) {
-                result.push(&input[start..=index]);
+            let end = index + character.len_utf8();
+            if WORD.is_match(&input[start..end]) {
+                result.push(&input[start..end]);
             }
-            start = index + character.len_utf8();
+            start = end;
         }
     }
     if start < input.len() && WORD.is_match(&input[start..]) {
@@ -443,6 +444,14 @@ mod tests {
         assert_eq!(
             fallback_keywords("Rust rust tests and code", 2),
             ["rust", "tests"]
+        );
+    }
+
+    #[test]
+    fn sentences_handle_inverted_punctuation_and_multibyte_text() {
+        assert_eq!(
+            sentences("¿Qué tal? ¡Bien! Привет 世界."),
+            ["Qué tal?", "Bien!", " Привет 世界."]
         );
     }
 }

@@ -175,10 +175,18 @@ fn main() -> Result<()> {
             sessions,
             dump,
             exclude,
+            host,
             lang,
         } => {
             let localizer = resolve_language(&app, &connection, lang, None)?;
-            import::import_sessions(&connection, sessions, &exclude, dump.as_deref(), &localizer)?
+            import::import_sessions(
+                &connection,
+                sessions,
+                &exclude,
+                dump.as_deref(),
+                host,
+                &localizer,
+            )?
         }
         Cmd::ImportScores { file, lang } => {
             let localizer = resolve_language(&app, &connection, lang, None)?;

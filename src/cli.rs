@@ -118,6 +118,8 @@ pub(crate) enum Cmd {
         #[arg(long, num_args = 0..)]
         exclude: Vec<String>,
         #[arg(long, value_enum)]
+        host: Option<TranscriptHost>,
+        #[arg(long, value_enum)]
         lang: Option<Lang>,
     },
     ImportScores {
@@ -152,6 +154,12 @@ pub(crate) enum Event {
     UserPromptSubmit,
     Stop,
     Notification,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
+pub(crate) enum TranscriptHost {
+    Claude,
+    Codex,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
@@ -526,6 +534,8 @@ mod tests {
             "--exclude",
             "one",
             "two",
+            "--host",
+            "claude",
             "--lang",
             "es",
         ])
@@ -534,6 +544,7 @@ mod tests {
             cli.cmd,
             Cmd::Import {
                 exclude,
+                host: Some(TranscriptHost::Claude),
                 lang: Some(Lang::Es),
                 ..
             } if exclude == ["one", "two"]
