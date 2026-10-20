@@ -1,3 +1,5 @@
+![](assets/icon.svg)
+
 # Nebula
 
 Nebula is a local Rust CLI and Agent Skill for measuring communication and
