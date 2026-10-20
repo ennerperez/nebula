@@ -36,6 +36,10 @@ Published release packages cover Linux, macOS, and Windows on `x86_64` and
 `aarch64`. On Windows, run the shell installer from an environment that provides
 `sh` and `uname`, such as Git Bash, MSYS2, or Cygwin.
 
+Release CI validates the selected `vX.Y.Z` tag and injects `X.Y.Z` as the
+compile-time CLI version. Local builds without that release variable report the
+package version from `Cargo.toml`.
+
 | Platform | Architecture | Release asset |
 | --- | --- | --- |
 | Linux | `x86_64` | `nebula-linux-x86_64.tar.gz` |

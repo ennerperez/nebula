@@ -78,3 +78,7 @@ including host metadata. Runtime localization and report export remain
 self-contained inside the executable; catalogs in the archive are
 reference/source assets.
 
+Release builds set `NEBULA_BUILD_VERSION` from the validated Git tag. Clap uses
+that compile-time value for `nebula --version`; ordinary local builds fall back
+to the package version in `Cargo.toml`.
+

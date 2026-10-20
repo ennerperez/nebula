@@ -2,8 +2,13 @@ use crate::i18n::Lang;
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use std::path::PathBuf;
 
+const VERSION: &str = match option_env!("NEBULA_BUILD_VERSION") {
+    Some(version) => version,
+    None => env!("CARGO_PKG_VERSION"),
+};
+
 #[derive(Parser)]
-#[command(name = "nebula", version, about)]
+#[command(name = "nebula", version = VERSION, about)]
 pub(crate) struct Cli {
     #[arg(long, global = true, value_name = "PATH")]
     pub(crate) agent_home: Option<PathBuf>,
