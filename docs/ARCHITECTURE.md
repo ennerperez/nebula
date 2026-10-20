@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This document describes Nebular at `develop` commit `699f0f4`, identifies
+This document describes Nebula at `develop` commit `699f0f4`, identifies
 refactoring pressure with source evidence, and defines a target architecture for
 incremental SOLID adoption. It is an assessment, not a request to rewrite the
 application. The public CLI, SQLite data, privacy guarantees, localization, and
@@ -10,7 +10,7 @@ portable single-binary distribution are compatibility boundaries.
 
 ## System context
 
-Nebular is a Rust 2024 command-line application and agent skill. It receives
+Nebula is a Rust 2024 command-line application and agent skill. It receives
 manual commands or host hook events, derives numeric communication metrics,
 stores them in SQLite, and renders localized reports. Transcript text is read
 only for in-memory analysis and must never be stored.
@@ -80,7 +80,7 @@ represented as SQL rows, strings, tuples, and `BTreeMap<String, f64>` rather tha
 typed records. All major workflows accept a concrete `rusqlite::Connection`.
 
 State outside SQLite is session-scoped JSON and language files under
-`$NEBULAR_HOME/state`, managed directly by [`App`](../src/app.rs#L7). Historical
+`$NEBULA_HOME/state`, managed directly by [`App`](../src/app.rs#L7). Historical
 transcripts remain external and are read on demand.
 
 ### Existing testing seams
@@ -164,7 +164,7 @@ Consumers currently receive concrete, capability-rich objects:
 `rusqlite::Connection`, `App`, and `Localizer`. Narrow traits should follow use
 cases, not mirror whole modules—for example `TurnReader`, `TurnWriter`,
 `ModelStore`, `SessionStateStore`, `TranscriptCatalog`, `Clock`, and
-`OutputSink`. Avoid one `NebularRepository` god trait.
+`OutputSink`. Avoid one `NebulaRepository` god trait.
 
 ### Dependency Inversion Principle
 
@@ -288,5 +288,5 @@ time. Delete compatibility facades only after all callers and tests have moved.
 
 The executable must remain buildable and unit-testable after every phase. The
 detailed waves, dependencies, acceptance criteria, tests, risks, worktrees, and
-commit messages are in `docs/plan-NEBULAR-solid-refactor.md` (intentionally
+commit messages are in `docs/plan-NEBULA-solid-refactor.md` (intentionally
 ignored by Git as a working plan).

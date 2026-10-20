@@ -187,7 +187,7 @@ fn resolve_language(
     let stored = session
         .as_deref()
         .and_then(|session| app.session_language(session));
-    let environment = std::env::var("NEBULAR_LANG").ok();
+    let environment = std::env::var("NEBULA_LANG").ok();
     let localizer = Localizer::resolve(explicit, stored.as_deref(), environment.as_deref())?;
     if explicit.is_some()
         && let Some(session) = session

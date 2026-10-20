@@ -11,9 +11,9 @@ pub(crate) struct App {
 impl App {
     pub(crate) fn new() -> Result<Self> {
         Ok(Self {
-            home: std::env::var_os("NEBULAR_HOME")
+            home: std::env::var_os("NEBULA_HOME")
                 .map(PathBuf::from)
-                .or_else(|| dirs::home_dir().map(|p| p.join(".nebular")))
+                .or_else(|| dirs::home_dir().map(|p| p.join(".nebula")))
                 .context("no home")?,
         })
     }
@@ -99,7 +99,7 @@ mod tests {
     fn test_app() -> App {
         let n = NEXT_HOME.fetch_add(1, Ordering::Relaxed);
         App {
-            home: std::env::temp_dir().join(format!("nebular-test-{}-{n}", std::process::id())),
+            home: std::env::temp_dir().join(format!("nebula-test-{}-{n}", std::process::id())),
         }
     }
 

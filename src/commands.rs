@@ -207,7 +207,7 @@ mod tests {
 
     fn test_app(name: &str) -> App {
         App::for_test(
-            std::env::temp_dir().join(format!("nebular-test-{}-{name}", std::process::id())),
+            std::env::temp_dir().join(format!("nebula-test-{}-{name}", std::process::id())),
         )
     }
 

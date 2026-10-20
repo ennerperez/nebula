@@ -648,7 +648,7 @@ fn cv_score(xs: &[Vec<f64>], ys: &[f64], penalty: f64, folds: usize) -> f64 {
 }
 
 fn transcript_roots() -> Vec<PathBuf> {
-    if let Some(value) = env::var_os("NEBULAR_TRANSCRIPTS") {
+    if let Some(value) = env::var_os("NEBULA_TRANSCRIPTS") {
         return env::split_paths(&value).collect();
     }
     let Some(home) = dirs::home_dir() else {
@@ -924,7 +924,7 @@ mod tests {
             .unwrap();
         connection.execute("INSERT INTO turns(session_id,seq,started_at)VALUES('session-x',1,'2026-01-01T00:00:00Z')", []).unwrap();
         let root = std::env::temp_dir().join(format!(
-            "nebular-learning-{}-{}",
+            "nebula-learning-{}-{}",
             std::process::id(),
             connection.last_insert_rowid()
         ));
@@ -983,7 +983,7 @@ mod tests {
     fn fit_honors_dry_run_then_adopts_and_recomputes() {
         let connection = database();
         let root = std::env::temp_dir().join(format!(
-            "nebular-fit-{}-{}",
+            "nebula-fit-{}-{}",
             std::process::id(),
             metric_id(&connection, "ambiguity").unwrap()
         ));

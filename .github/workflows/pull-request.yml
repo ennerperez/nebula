@@ -19,7 +19,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Build CLI on stable Rust
-        run: cargo +stable build --locked --bin nebular
+        run: cargo +stable build --locked --bin nebula
 
       - name: Install nightly Rust toolchain for coverage
         uses: dtolnay/rust-toolchain@nightly

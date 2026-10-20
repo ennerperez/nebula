@@ -2,12 +2,12 @@
 
 set -eu
 
-PROGRAM=nebular
-DEFAULT_REPO=ennerperez/nebular
-REPO=${NEBULAR_REPO:-$DEFAULT_REPO}
-VERSION=${NEBULAR_VERSION:-latest}
-BIN_DIR=${NEBULAR_INSTALL_DIR:-${HOME:-}/.local/bin}
-AGENT_MODE=${NEBULAR_AGENT:-auto}
+PROGRAM=nebula
+DEFAULT_REPO=ennerperez/nebula
+REPO=${NEBULA_REPO:-$DEFAULT_REPO}
+VERSION=${NEBULA_VERSION:-latest}
+BIN_DIR=${NEBULA_INSTALL_DIR:-${HOME:-}/.local/bin}
+AGENT_MODE=${NEBULA_AGENT:-auto}
 INSTALL_CLI=1
 INSTALL_SKILL=1
 SKILL_ROOTS=
@@ -15,25 +15,25 @@ TMP_DIR=
 
 usage() {
     cat <<'EOF'
-Install the Nebular CLI and its Agent Skill from a verified GitHub release.
+Install the Nebula CLI and its Agent Skill from a verified GitHub release.
 
 Usage:
   ./install.sh [options]
 
 Options:
   --version <version>    Release tag (for example, v0.1.0). Default: latest
-  --repo <owner/repo>    GitHub repository. Default: ennerperez/nebular
-  --bin-dir <path>       CLI destination. Default: $NEBULAR_INSTALL_DIR or ~/.local/bin
+  --repo <owner/repo>    GitHub repository. Default: ennerperez/nebula
+  --bin-dir <path>       CLI destination. Default: $NEBULA_INSTALL_DIR or ~/.local/bin
   --agent <agent>        Skill target: auto, all, codex, claude, gemini,
                          opencode, generic, or none. May be repeated.
-  --skill-dir <path>     Additional skills root; installs <path>/nebular.
+  --skill-dir <path>     Additional skills root; installs <path>/nebula.
                          May be repeated.
   --no-cli               Do not install the CLI.
   --no-skill             Do not install the Agent Skill.
   -h, --help             Show this help.
 
 Environment overrides:
-  NEBULAR_REPO, NEBULAR_VERSION, NEBULAR_INSTALL_DIR, NEBULAR_AGENT
+  NEBULA_REPO, NEBULA_VERSION, NEBULA_INSTALL_DIR, NEBULA_AGENT
 
 The script downloads an archive and SHA256SUMS into a temporary directory,
 verifies the archive, then installs files. It never executes downloaded code.
@@ -202,7 +202,7 @@ else
     die 'curl or wget is required'
 fi
 
-TMP_DIR=$(mktemp -d 2>/dev/null || mktemp -d -t nebular-install)
+TMP_DIR=$(mktemp -d 2>/dev/null || mktemp -d -t nebula-install)
 trap cleanup EXIT HUP INT TERM
 
 if [ "$VERSION" = latest ]; then
@@ -285,8 +285,8 @@ if [ "$INSTALL_CLI" -eq 1 ]; then
     [ -f "$TMP_DIR/release/$BINARY" ] || die "release does not contain $BINARY"
 fi
 if [ "$INSTALL_SKILL" -eq 1 ]; then
-    [ -f "$TMP_DIR/release/skills/nebular/SKILL.md" ] || \
-        die 'release does not contain skills/nebular/SKILL.md'
+    [ -f "$TMP_DIR/release/skills/nebula/SKILL.md" ] || \
+        die 'release does not contain skills/nebula/SKILL.md'
 fi
 
 if [ "$INSTALL_CLI" -eq 1 ]; then
@@ -332,9 +332,9 @@ if [ "$INSTALL_SKILL" -eq 1 ]; then
     IFS='
 '
     for root in $SKILL_ROOTS; do
-        destination=$root/nebular
+        destination=$root/nebula
         mkdir -p "$destination"
-        cp -R "$TMP_DIR/release/skills/nebular/." "$destination/"
+        cp -R "$TMP_DIR/release/skills/nebula/." "$destination/"
         note "Installed Agent Skill: $destination"
     done
     IFS=$old_ifs

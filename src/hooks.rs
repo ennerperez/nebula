@@ -651,7 +651,7 @@ mod tests {
     }
     fn setup(name: &str) -> (App, Connection, PathBuf) {
         let root = std::env::temp_dir().join(format!(
-            "nebular-hooks-{}-{name}-{}",
+            "nebula-hooks-{}-{name}-{}",
             std::process::id(),
             NEXT.fetch_add(1, Ordering::Relaxed)
         ));

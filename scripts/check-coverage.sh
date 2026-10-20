@@ -7,7 +7,7 @@ trap 'rm -f "$report"' EXIT
 
 cargo +nightly llvm-cov \
   --locked \
-  --bin nebular \
+  --bin nebula \
   --branch \
   --fail-under-lines "$threshold" \
   | tee "$report"

@@ -21,4 +21,4 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Build CLI
-        run: cargo build --locked --bin nebular
+        run: cargo build --locked --bin nebula

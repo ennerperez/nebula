@@ -173,7 +173,7 @@ fn import_with_roots(
 
     if let Some(path) = dump {
         let payload = SafeDump {
-            schema: "nebular.safe-import-dump.v1",
+            schema: "nebula.safe-import-dump.v1",
             privacy: "No transcript text is included. Only numeric metrics, categorical metadata, derived keywords, and heuristic scores are exported.",
             turns: safe_turns,
         };
@@ -560,7 +560,7 @@ fn apply_scores(
 }
 
 fn transcript_roots() -> Vec<PathBuf> {
-    if let Some(value) = env::var_os("NEBULAR_TRANSCRIPTS") {
+    if let Some(value) = env::var_os("NEBULA_TRANSCRIPTS") {
         return env::split_paths(&value).collect();
     }
     let Some(home) = dirs::home_dir() else {
@@ -930,7 +930,7 @@ mod tests {
 
     fn fixture() -> PathBuf {
         let path = env::temp_dir().join(format!(
-            "nebular-import-{}-{}",
+            "nebula-import-{}-{}",
             std::process::id(),
             NEXT.fetch_add(1, Ordering::Relaxed)
         ));
@@ -1034,7 +1034,7 @@ mod tests {
         let dump_text = fs::read_to_string(&dump).unwrap();
         assert!(!dump_text.contains("private widget"));
         assert!(!dump_text.contains("Done privately"));
-        assert!(dump_text.contains("nebular.safe-import-dump.v1"));
+        assert!(dump_text.contains("nebula.safe-import-dump.v1"));
         fs::remove_dir_all(root).unwrap();
     }
 

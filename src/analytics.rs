@@ -1407,7 +1407,7 @@ mod tests {
                 connection,
                 if index < 5 { "s1" } else { "s2" },
                 if index % 2 == 0 {
-                    "owner/nebular"
+                    "owner/nebula"
                 } else {
                     "owner/other"
                 },
@@ -1523,12 +1523,12 @@ mod tests {
             None,
             None,
             Some("RUST".into()),
-            Some("nebular".into()),
+            Some("nebula".into()),
             &english(),
         )
         .unwrap();
         assert!(
-            output.contains("Filters: keyword rust, repo nebular"),
+            output.contains("Filters: keyword rust, repo nebula"),
             "{output}"
         );
         assert!(output.contains("4 turns"));
@@ -1572,7 +1572,7 @@ mod tests {
             ["me", "both"]
         );
         let file = std::env::temp_dir().join(format!(
-            "nebular-recommendations-{}.json",
+            "nebula-recommendations-{}.json",
             std::process::id()
         ));
         fs::write(&file, r#"{"you":["From file"]}"#).unwrap();

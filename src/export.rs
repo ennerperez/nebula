@@ -312,7 +312,7 @@ fn default_local_path(format: ExportFormat, suffix: usize) -> PathBuf {
         format!("-{suffix}")
     };
     PathBuf::from(format!(
-        "nebular-report-{timestamp}{suffix}.{}",
+        "nebula-report-{timestamp}{suffix}.{}",
         format.extension()
     ))
 }
@@ -960,7 +960,7 @@ mod tests {
     fn test_dir() -> PathBuf {
         let id = NEXT_PATH.fetch_add(1, Ordering::Relaxed);
         std::env::temp_dir().join(format!(
-            "nebular-structured-report-{}-{id}",
+            "nebula-structured-report-{}-{id}",
             std::process::id()
         ))
     }

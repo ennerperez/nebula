@@ -1,8 +1,8 @@
-# Nebular CLI guide
+# Nebula CLI guide
 
-## What Nebular does
+## What Nebula does
 
-Nebular measures communication and execution efficiency for AI-agent turns.
+Nebula measures communication and execution efficiency for AI-agent turns.
 Its hooks and agent-facing commands cooperate to record:
 
 - estimated and actual elapsed time;
@@ -11,13 +11,13 @@ Its hooks and agent-facing commands cooperate to record:
 - numeric user-to-agent (`u2a`) and agent-to-user (`a2u`) clarity scores;
 - aggregate "nebulosity" derived from ten clarity dimensions.
 
-Data stays in a local SQLite database. Nebular processes hook prompt and
+Data stays in a local SQLite database. Nebula processes hook prompt and
 response text in memory to obtain counts and heuristics, but does not store the
 text, rationale, source code, credentials, or token content. The same invariant
 applies to transcript import and learned heuristics. An import dump contains
 safe metadata and a scoring scaffold, never prompt or answer text.
 
-Nebular provides turn hooks, explicit logging, localized reports and exports,
+Nebula provides turn hooks, explicit logging, localized reports and exports,
 historical estimates and tips, heuristic learning and calibration, historical
 import, and metric-definition management.
 
@@ -38,12 +38,12 @@ Published release packages cover Linux, macOS, and Windows on `x86_64` and
 
 | Platform | Architecture | Release asset |
 | --- | --- | --- |
-| Linux | `x86_64` | `nebular-linux-x86_64.tar.gz` |
-| Linux | `aarch64` | `nebular-linux-aarch64.tar.gz` |
-| macOS | `x86_64` | `nebular-macos-x86_64.tar.gz` |
-| macOS | `aarch64` | `nebular-macos-aarch64.tar.gz` |
-| Windows | `x86_64` | `nebular-windows-x86_64.zip` |
-| Windows | `aarch64` | `nebular-windows-aarch64.zip` |
+| Linux | `x86_64` | `nebula-linux-x86_64.tar.gz` |
+| Linux | `aarch64` | `nebula-linux-aarch64.tar.gz` |
+| macOS | `x86_64` | `nebula-macos-x86_64.tar.gz` |
+| macOS | `aarch64` | `nebula-macos-aarch64.tar.gz` |
+| Windows | `x86_64` | `nebula-windows-x86_64.zip` |
+| Windows | `aarch64` | `nebula-windows-aarch64.zip` |
 
 ### Recommended: verified release installer
 
@@ -51,18 +51,18 @@ Download and inspect the script, then run it:
 
 ```sh
 curl --proto '=https' --tlsv1.2 -fsSLO \
-  https://raw.githubusercontent.com/ennerperez/nebular/develop/install.sh
+  https://raw.githubusercontent.com/ennerperez/nebula/develop/install.sh
 sh install.sh
 ```
 
 By default the installer:
 
-1. resolves the latest release for `ennerperez/nebular`;
+1. resolves the latest release for `ennerperez/nebula`;
 2. chooses an archive for the detected operating system and architecture;
 3. downloads the archive and `SHA256SUMS` into a temporary directory;
 4. verifies the checksum and rejects unsafe archive paths before extraction;
-5. installs the CLI to `~/.local/bin` and verifies `nebular --version`;
-6. detects installed AI agents and copies the bundled Nebular skill to each
+5. installs the CLI to `~/.local/bin` and verifies `nebula --version`;
+6. detects installed AI agents and copies the bundled Nebula skill to each
    detected user-level skills directory.
 
 The script never executes code downloaded from a release archive. If
@@ -72,7 +72,7 @@ Installer options:
 
 ```text
 --version <version>    Release tag, such as v0.1.0 (default: latest)
---repo <owner/repo>    GitHub repository (default: ennerperez/nebular)
+--repo <owner/repo>    GitHub repository (default: ennerperez/nebula)
 --bin-dir <path>       CLI destination (default: ~/.local/bin)
 --agent <agent>        auto, all, codex, claude, gemini, opencode, generic,
                        or none; may be repeated
@@ -82,8 +82,8 @@ Installer options:
 -h, --help             Print installer help
 ```
 
-Equivalent environment overrides are `NEBULAR_VERSION`, `NEBULAR_REPO`,
-`NEBULAR_INSTALL_DIR`, and `NEBULAR_AGENT`.
+Equivalent environment overrides are `NEBULA_VERSION`, `NEBULA_REPO`,
+`NEBULA_INSTALL_DIR`, and `NEBULA_AGENT`.
 
 Examples:
 
@@ -103,29 +103,29 @@ sh install.sh --no-cli --skill-dir "$HOME/my-agent/skills"
 
 ### Agent detection and skill locations
 
-In `auto` mode, Nebular detects an agent when its executable or configuration
+In `auto` mode, Nebula detects an agent when its executable or configuration
 directory exists. It installs the skill to:
 
 | Agent | Skill directory |
 | --- | --- |
-| Codex | `${CODEX_HOME:-~/.codex}/skills/nebular` |
-| Claude Code | `${CLAUDE_CONFIG_DIR:-~/.claude}/skills/nebular` |
-| Gemini CLI | `${GEMINI_CLI_HOME:-~}/.gemini/skills/nebular` |
-| OpenCode | `${XDG_CONFIG_HOME:-~/.config}/opencode/skills/nebular` |
-| Generic fallback | `~/.agents/skills/nebular` |
+| Codex | `${CODEX_HOME:-~/.codex}/skills/nebula` |
+| Claude Code | `${CLAUDE_CONFIG_DIR:-~/.claude}/skills/nebula` |
+| Gemini CLI | `${GEMINI_CLI_HOME:-~}/.gemini/skills/nebula` |
+| OpenCode | `${XDG_CONFIG_HOME:-~/.config}/opencode/skills/nebula` |
+| Generic fallback | `~/.agents/skills/nebula` |
 
 When no supported agent is detected, installer uses generic location.
 `--agent all` targets every known agent location. `--agent none` disables skill
 installation unless explicit `--skill-dir` targets were also supplied.
 
 Skill installation alone does not add host hook configuration. AI agent or host
-integration must invoke `nebular hook` at prompt, stop, and notification events
+integration must invoke `nebula hook` at prompt, stop, and notification events
 where supported.
 
 ### Install from a release archive
 
 Release archives contain platform binary, `README.md`, `LICENSE`, `docs`,
-embedded locale catalog sources under `locales`, and `skills/nebular`.
+embedded locale catalog sources under `locales`, and `skills/nebula`.
 Download matching archive and `SHA256SUMS` from repository's GitHub Releases
 page, verify archive, then place binary on `PATH` and copy skill directory to an
 agent location listed above. Locale strings are compiled into the executable;
@@ -136,35 +136,35 @@ the binary needs no adjacent runtime catalog files.
 Install Rust 1.85 or newer, clone repository, then run:
 
 ```sh
-cargo build --release --locked --bin nebular
+cargo build --release --locked --bin nebula
 ```
 
-Executable is written to `target/release/nebular` (or
-`target/release/nebular.exe` on Windows). To install binary through Cargo:
+Executable is written to `target/release/nebula` (or
+`target/release/nebula.exe` on Windows). To install binary through Cargo:
 
 ```sh
 cargo install --locked --path .
 ```
 
-Copy `skills/nebular` manually when a source installation also needs Agent
+Copy `skills/nebula` manually when a source installation also needs Agent
 Skill.
 
 ### Update and uninstall
 
-Nebular has no built-in update or uninstall command. Re-run `install.sh` to
+Nebula has no built-in update or uninstall command. Re-run `install.sh` to
 replace CLI and skill with latest or selected release.
 
-To uninstall, remove `nebular` executable from selected binary directory and
-remove `nebular` from each skills directory where installed. Metrics remain
+To uninstall, remove `nebula` executable from selected binary directory and
+remove `nebula` from each skills directory where installed. Metrics remain
 intact. Remove data directory separately only when its history is no longer
 needed.
 
 ## Storage and configuration
 
-Nebular stores its database and transient per-session state under:
+Nebula stores its database and transient per-session state under:
 
 ```text
-~/.nebular/
+~/.nebula/
 ├── metrics.db
 ├── reports/
 └── state/
@@ -173,10 +173,10 @@ Nebular stores its database and transient per-session state under:
 `reports/` is created on demand for preferred HTML and PDF output. Other
 preferred formats use stdout unless `--output` is given.
 
-Set `NEBULAR_HOME` to use another location:
+Set `NEBULA_HOME` to use another location:
 
 ```sh
-NEBULAR_HOME="$HOME/.local/share/nebular" nebular report
+NEBULA_HOME="$HOME/.local/share/nebula" nebula report
 ```
 
 Database schema is created and seeded on first command execution, including
@@ -185,7 +185,7 @@ commands such as `report` and `metrics list`.
 ### Language selection
 
 Commands that produce user-facing output accept `--lang en` or `--lang es`.
-Resolution order is explicit option, current session language, `NEBULAR_LANG`,
+Resolution order is explicit option, current session language, `NEBULA_LANG`,
 then English. An explicit language on a session command is persisted under
 `state/` for later hook output. Catalogs are complete and embedded; unknown
 language codes fail instead of mixing languages or silently falling back.
@@ -194,22 +194,22 @@ language codes fail instead of mixing languages or silently falling back.
 
 Normal operation follows this order:
 
-1. Host sends `user-prompt-submit`; Nebular opens a turn, counts prompt words,
+1. Host sends `user-prompt-submit`; Nebula opens a turn, counts prompt words,
    and records heuristic `u2a` values.
-2. Agent runs `log-start`; Nebular attaches estimate, keywords, optional task
+2. Agent runs `log-start`; Nebula attaches estimate, keywords, optional task
    metadata, and model-provided `u2a` scores to that open turn.
 3. Agent completes work and runs `tips` to compare the current prompt with its
    recent same-session baseline.
 4. Agent writes one live tip only when that gate is on, then runs `log-end`;
-   Nebular records model-provided `a2u` scores, optional outcome, and tip.
-5. Host sends `stop`; Nebular records actual elapsed time, estimate ratio,
+   Nebula records model-provided `a2u` scores, optional outcome, and tip.
+5. Host sends `stop`; Nebula records actual elapsed time, estimate ratio,
    response word count, heuristic `a2u` values, request/agent activity, and
    closes turn.
 
 Intermediate stops refresh metrics without closing a turn that has not reached
 `log-end`. If `log-end` never arrives, the next prompt recovers the previous
 turn at its last stop before opening the next one. Internal subagent messages
-are ignored as user prompts. Where host payloads provide the data, Nebular also
+are ignored as user prompts. Where host payloads provide the data, Nebula also
 captures repository, branch, ticket, model, blocked time, and subagent
 transcript activity.
 
@@ -219,16 +219,16 @@ Example manual lifecycle:
 SCORES='{"ambiguity":10,"idea_branching":10,"idea_dispersion":10,"context_gap":10,"explanation_gap":10,"argument_gap":10,"lucidity_deficit":10,"structural_complexity":10,"opacity":10,"certainty_deficit":10}'
 
 printf '%s' '{"session_id":"demo","prompt":"Explain the release process"}' \
-  | nebular hook user-prompt-submit
+  | nebula hook user-prompt-submit
 
-nebular log-start --session demo --estimate 120 \
+nebula log-start --session demo --estimate 120 \
   --keywords 'release,documentation' --type explain --u2a "$SCORES"
 
-nebular tips --session demo
-nebular log-end --session demo --outcome completed --a2u "$SCORES"
+nebula tips --session demo
+nebula log-end --session demo --outcome completed --a2u "$SCORES"
 
 printf '%s' '{"session_id":"demo","last_assistant_message":"Release explained."}' \
-  | nebular hook stop
+  | nebula hook stop
 ```
 
 Each score object must contain all ten documented keys. Values are numeric and
@@ -236,10 +236,10 @@ clamped to range 0 through 100.
 
 ## Command reference
 
-Run `nebular help <COMMAND>` for generated help. Global options are
+Run `nebula help <COMMAND>` for generated help. Global options are
 `-h, --help` and `-V, --version`.
 
-### `nebular hook <EVENT>`
+### `nebula hook <EVENT>`
 
 Reads one host event as JSON from standard input.
 
@@ -251,21 +251,21 @@ Events:
 - `notification` records the start of permission waits when the host payload
   identifies a permission prompt; other notification types are ignored.
 
-Hook-processing errors are printed as `nebular hook error: ...` without failing
+Hook-processing errors are printed as `nebula hook error: ...` without failing
 host event. Initialization errors occurring before event processing still
 return non-zero exit status.
 
-### `nebular log-start`
+### `nebula log-start`
 
 ```text
-nebular log-start --estimate <SECONDS> --keywords <CSV> --u2a <JSON>
+nebula log-start --estimate <SECONDS> --keywords <CSV> --u2a <JSON>
                   [--type <TYPE>] [--clarifying <COUNT>]
                   [--correction <0|1>] [--session <ID>] [--lang <en|es>]
 ```
 
 Records agent estimates and model scores on existing open turn. Keywords are
 trimmed, converted to lowercase, and stored individually. `--correction` is
-applied to preceding turn when one exists. Without `--session`, Nebular uses
+applied to preceding turn when one exists. Without `--session`, Nebula uses
 most recently started open turn.
 
 `--estimate` must be a finite number greater than zero and `--clarifying`
@@ -274,10 +274,10 @@ must be a non-negative integer.
 Success output resembles `turn 2 logged`. It fails when no open turn exists or
 when `--u2a` is invalid JSON or omits a required score.
 
-### `nebular log-end`
+### `nebula log-end`
 
 ```text
-nebular log-end --a2u <JSON> [--outcome <LABEL>] [--tip <TEXT>]
+nebula log-end --a2u <JSON> [--outcome <LABEL>] [--tip <TEXT>]
                 [--session <ID>] [--lang <en|es>]
 ```
 
@@ -292,10 +292,10 @@ Host `stop` event performs final timing and closure.
 Success output resembles `turn 2 closed by model`. Error conditions match
 `log-start` for open-turn selection and score parsing.
 
-### `nebular report`
+### `nebula report`
 
 ```text
-nebular report [u2a|a2u] [--days <DAYS>] [--keyword <KEYWORD>]
+nebula report [u2a|a2u] [--days <DAYS>] [--keyword <KEYWORD>]
                [--repo <REPO>] [--recs <JSON_OR_FILE>]
                [--format <md|html|json|csv|pdf>] [-o|--output <PATH>]
                [--export <md|html|json|csv|pdf>] [--lang <en|es>]
@@ -308,8 +308,8 @@ matching turns. With no rows, output is `no data`.
 
 `--format` is the preferred interface. Markdown, structured JSON, and tidy CSV
 go to stdout by default. Standalone HTML and portable PDF always create local
-files, defaulting to safe timestamped names under `~/.nebular/reports` (or
-`$NEBULAR_HOME/reports`). `-o`/`--output` selects an exact destination for any
+files, defaulting to safe timestamped names under `~/.nebula/reports` (or
+`$NEBULA_HOME/reports`). `-o`/`--output` selects an exact destination for any
 format; with no format it writes Markdown. HTML is self-contained with
 light/dark styling. PDF is generated without a browser or network. CSV uses:
 
@@ -325,7 +325,7 @@ values to `--format` and `--export` fails. Explicit and generated paths never
 overwrite existing files.
 
 Recommendations are written by the agent, not synthesized by the CLI. Run
-`nebular tips --both`, derive concrete actions, and pass inline JSON or a local
+`nebula tips --both`, derive concrete actions, and pass inline JSON or a local
 JSON file through `--recs`:
 
 ```json
@@ -337,17 +337,17 @@ were not supplied. Direction-scoped reports emit only relevant groups; SWOT
 remains computed from numeric rules.
 
 ```sh
-nebular report --days 30 --format html
-nebular report u2a --keyword rust --format json -o u2a-rust.json
-nebular report --repo owner/nebular --format pdf --lang es
-nebular report --format md --recs recommendations.json
-nebular report --export html # compatibility: writes in current directory
+nebula report --days 30 --format html
+nebula report u2a --keyword rust --format json -o u2a-rust.json
+nebula report --repo owner/nebula --format pdf --lang es
+nebula report --format md --recs recommendations.json
+nebula report --export html # compatibility: writes in current directory
 ```
 
-### `nebular metrics list`
+### `nebula metrics list`
 
 ```text
-nebular metrics [--lang <en|es>] list
+nebula metrics [--lang <en|es>] list
 ```
 
 Lists metric key, category, unit, whether lower or higher values are better,
@@ -355,23 +355,23 @@ parent, weight, and directional flag. Initial catalog contains core execution
 metrics, aggregate `nebulosity` metric, and all ten clarity dimensions. Stable
 database keys remain unchanged across languages.
 
-### `nebular metrics add`
+### `nebula metrics add`
 
 ```text
-nebular metrics [--lang <en|es>] add <KEY> <NAME> <CATEGORY> <UNIT> <BETTER>
+nebula metrics [--lang <en|es>] add <KEY> <NAME> <CATEGORY> <UNIT> <BETTER>
                     [--parent <KEY>] [--weight <NUMBER>]
                     [--aggregation <NAME>] [--directional]
 ```
 
 Adds metric definition. `<BETTER>` must be `lower` or `higher`. Default weight
 is `1` and must be finite and non-negative; default aggregation is `sum`.
-Parent key must already exist. Nebular reports `metric <KEY> added` on success
+Parent key must already exist. Nebula reports `metric <KEY> added` on success
 and returns database error for duplicate key.
 
-### `nebular tips`
+### `nebula tips`
 
 ```text
-nebular tips [--share <NUMBER>] [--both] [--all]
+nebula tips [--share <NUMBER>] [--both] [--all]
              [--session <ID>] [--lang <en|es>]
 ```
 
@@ -388,20 +388,20 @@ known session rather than the latest active/recent one. Use the output to write
 one direct, session-language tip of at most 90 characters only while gate is
 on.
 
-### `nebular estimate`
+### `nebula estimate`
 
 ```text
-nebular estimate --keywords <CSV> [--lang <en|es>]
+nebula estimate --keywords <CSV> [--lang <en|es>]
 ```
 
 Matches normalized keywords against historical turns and prints match count,
 weighted estimate, median, p90, and prior estimate ratio when available. It
 reports that no history matches instead of inventing an estimate.
 
-### `nebular calibrate`
+### `nebula calibrate`
 
 ```text
-nebular calibrate [--min-samples <COUNT>] [--lang <en|es>]
+nebula calibrate [--min-samples <COUNT>] [--lang <en|es>]
 ```
 
 Fits a least-squares mapping from heuristic to model values for every clarity
@@ -409,10 +409,10 @@ dimension and direction. Default minimum is 20 paired samples. Raw heuristic
 values remain unchanged; reporting views apply calibration when read. The
 minimum sample count must be at least one.
 
-### `nebular fit`
+### `nebula fit`
 
 ```text
-nebular fit [--min-samples <COUNT>] [--dry-run] [--lang <en|es>]
+nebula fit [--min-samples <COUNT>] [--dry-run] [--lang <en|es>]
 ```
 
 Reconstructs message text from locally available supported transcripts in
@@ -423,10 +423,10 @@ rule. A non-dry run recomputes heuristic values for matched historical turns
 and resets calibration; transcript text and feature vectors are not persisted.
 The minimum sample count must be at least one.
 
-### `nebular import`
+### `nebula import`
 
 ```text
-nebular import [--sessions <COUNT>] [--exclude <ID> ...]
+nebula import [--sessions <COUNT>] [--exclude <ID> ...]
                [--dump <PATH>] [--lang <en|es>]
 ```
 
@@ -435,21 +435,21 @@ transcripts recursively under `${CLAUDE_CONFIG_DIR:-~/.claude}/projects` and
 `${CODEX_HOME:-~/.codex}/sessions`, skips excluded or already imported
 sessions, and reconstructs sessions, turns, context, usage, timing, heuristic
 clarity values, corrections, and fallback keywords. Set
-`NEBULAR_TRANSCRIPTS` to an operating-system path list to replace both discovery
+`NEBULA_TRANSCRIPTS` to an operating-system path list to replace both discovery
 roots. Default limit is 10 sessions. Claude subagent activity is folded into its
 parent session; subagent transcript files are not imported as separate sessions.
 The session limit must be at least one.
 
 Text is processed only in memory. When requested, `--dump` writes schema
-`nebular.safe-import-dump.v1` with safe turn/session identifiers, timestamps,
+`nebula.safe-import-dump.v1` with safe turn/session identifiers, timestamps,
 word/request/agent counts, keywords, and heuristic scores; it never includes
 prompt or answer content. Treat the dump as local workflow data and remove it
 when no longer needed.
 
-### `nebular import-scores`
+### `nebula import-scores`
 
 ```text
-nebular import-scores <FILE> [--lang <en|es>]
+nebula import-scores <FILE> [--lang <en|es>]
 ```
 
 Reads a JSON array whose rows contain `turn_id` and may contain complete `u2a`
@@ -484,22 +484,22 @@ metric values. Schema setup is additive so existing databases retain history.
   single shell argument.
 - `--u2a missing: <key>` or `--a2u missing: <key>`: include all ten clarity
   dimensions.
-- Unknown language: use `en` or `es`, or correct `NEBULAR_LANG`.
+- Unknown language: use `en` or `es`, or correct `NEBULA_LANG`.
 - Fit/import finds no transcript samples: confirm supported host history exists
   in its standard or configured home and that session identifiers match.
 - Recommendation JSON fails: pass an object containing only `you`, `me`, and
   `both` string arrays, or a readable local file containing that object.
 - Tip is rejected: keep it to one direct action of 90 characters or fewer.
-- Export path exists: choose another `--output`; Nebular never overwrites it.
+- Export path exists: choose another `--output`; Nebula never overwrites it.
 - Installer checksum errors: do not bypass verification; confirm archive and
   `SHA256SUMS` come from same release.
-- `nebular: command not found`: add selected `--bin-dir` to `PATH`.
+- `nebula: command not found`: add selected `--bin-dir` to `PATH`.
 
 For machine-generated syntax, use:
 
 ```sh
-nebular --help
-nebular help log-start
-nebular metrics add --help
+nebula --help
+nebula help log-start
+nebula metrics add --help
 sh install.sh --help
 ```

@@ -3,7 +3,7 @@ use clap::{Args, Parser, Subcommand, ValueEnum};
 use std::path::PathBuf;
 
 #[derive(Parser)]
-#[command(name = "nebular", version, about)]
+#[command(name = "nebula", version, about)]
 pub(crate) struct Cli {
     #[command(subcommand)]
     pub(crate) cmd: Cmd,
@@ -292,7 +292,7 @@ mod tests {
     #[test]
     fn cli_parses_nested_and_value_enum_commands() {
         let hook =
-            Cli::try_parse_from(["nebular", "hook", "user-prompt-submit", "--lang", "es"]).unwrap();
+            Cli::try_parse_from(["nebula", "hook", "user-prompt-submit", "--lang", "es"]).unwrap();
         assert!(matches!(
             hook.cmd,
             Cmd::Hook {
@@ -300,7 +300,7 @@ mod tests {
                 lang: Some(Lang::Es)
             }
         ));
-        let metric = Cli::try_parse_from(["nebular", "metrics", "list"]).unwrap();
+        let metric = Cli::try_parse_from(["nebula", "metrics", "list"]).unwrap();
         assert!(matches!(
             metric.cmd,
             Cmd::Metrics {
@@ -309,7 +309,7 @@ mod tests {
             }
         ));
         let report = Cli::try_parse_from([
-            "nebular",
+            "nebula",
             "report",
             "u2a",
             "--days",
@@ -317,7 +317,7 @@ mod tests {
             "--keyword",
             "rust",
             "--repo",
-            "nebular",
+            "nebula",
             "--export",
             "json",
             "--output",
@@ -334,14 +334,14 @@ mod tests {
                 ..
             } if output == PathBuf::from("report.json")
         ));
-        assert!(Cli::try_parse_from(["nebular", "hook", "invalid"]).is_err());
+        assert!(Cli::try_parse_from(["nebula", "hook", "invalid"]).is_err());
     }
 
     #[test]
     fn cli_rejects_invalid_correction_outcome_scope_and_language() {
         assert!(
             Cli::try_parse_from([
-                "nebular",
+                "nebula",
                 "log-start",
                 "--estimate",
                 "1",
@@ -355,19 +355,19 @@ mod tests {
             .is_err()
         );
         assert!(
-            Cli::try_parse_from(["nebular", "log-end", "--a2u", "{}", "--outcome", "failed"])
+            Cli::try_parse_from(["nebula", "log-end", "--a2u", "{}", "--outcome", "failed"])
                 .is_err()
         );
-        assert!(Cli::try_parse_from(["nebular", "report", "both"]).is_err());
-        assert!(Cli::try_parse_from(["nebular", "report", "--days", "0"]).is_err());
-        assert!(Cli::try_parse_from(["nebular", "tips", "--lang", "fr"]).is_err());
-        assert!(Cli::try_parse_from(["nebular", "tips", "--share", "NaN"]).is_err());
-        assert!(Cli::try_parse_from(["nebular", "report", "--export", "xml"]).is_err());
-        assert!(Cli::try_parse_from(["nebular", "report", "--output", "report.md"]).is_ok());
+        assert!(Cli::try_parse_from(["nebula", "report", "both"]).is_err());
+        assert!(Cli::try_parse_from(["nebula", "report", "--days", "0"]).is_err());
+        assert!(Cli::try_parse_from(["nebula", "tips", "--lang", "fr"]).is_err());
+        assert!(Cli::try_parse_from(["nebula", "tips", "--share", "NaN"]).is_err());
+        assert!(Cli::try_parse_from(["nebula", "report", "--export", "xml"]).is_err());
+        assert!(Cli::try_parse_from(["nebula", "report", "--output", "report.md"]).is_ok());
         for estimate in ["0", "-1", "NaN", "inf"] {
             assert!(
                 Cli::try_parse_from([
-                    "nebular",
+                    "nebula",
                     "log-start",
                     "--estimate",
                     estimate,
@@ -381,7 +381,7 @@ mod tests {
         }
         assert!(
             Cli::try_parse_from([
-                "nebular",
+                "nebula",
                 "log-start",
                 "--estimate",
                 "1",
@@ -394,18 +394,18 @@ mod tests {
             ])
             .is_err()
         );
-        assert!(Cli::try_parse_from(["nebular", "import", "--sessions", "0"]).is_err());
-        assert!(Cli::try_parse_from(["nebular", "fit", "--min-samples", "0"]).is_err());
-        assert!(Cli::try_parse_from(["nebular", "calibrate", "--min-samples", "0"]).is_err());
+        assert!(Cli::try_parse_from(["nebula", "import", "--sessions", "0"]).is_err());
+        assert!(Cli::try_parse_from(["nebula", "fit", "--min-samples", "0"]).is_err());
+        assert!(Cli::try_parse_from(["nebula", "calibrate", "--min-samples", "0"]).is_err());
         assert!(
             Cli::try_parse_from([
-                "nebular", "metrics", "add", "x", "X", "cat", "unit", "lower", "--weight", "NaN"
+                "nebula", "metrics", "add", "x", "X", "cat", "unit", "lower", "--weight", "NaN"
             ])
             .is_err()
         );
         assert!(
             Cli::try_parse_from([
-                "nebular", "metrics", "add", "x", "X", "cat", "unit", "sideways"
+                "nebula", "metrics", "add", "x", "X", "cat", "unit", "sideways"
             ])
             .is_err()
         );
@@ -414,7 +414,7 @@ mod tests {
     #[test]
     fn tips_accepts_conversation_window_options() {
         let cli = Cli::try_parse_from([
-            "nebular",
+            "nebula",
             "tips",
             "--share",
             "0.8",
@@ -439,7 +439,7 @@ mod tests {
     #[test]
     fn report_accepts_preferred_formats_outputs_and_recommendations() {
         let cli = Cli::try_parse_from([
-            "nebular",
+            "nebula",
             "report",
             "a2u",
             "--format",
@@ -465,7 +465,7 @@ mod tests {
     #[test]
     fn import_accepts_multiple_excluded_sessions() {
         let cli = Cli::try_parse_from([
-            "nebular",
+            "nebula",
             "import",
             "--exclude",
             "one",

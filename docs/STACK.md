@@ -13,8 +13,8 @@
 
 ## Runtime considerations
 
-- Default data directory is `~/.nebular`; `NEBULAR_HOME` overrides it.
-- Database schema and command output remain compatible with Python Nebular where practical.
+- Default data directory is `~/.nebula`; `NEBULA_HOME` overrides it.
+- Database schema and command output remain compatible with Python Nebula where practical.
 - Prompt, response, rationale, and token text must never be persisted in SQLite. Transcript text is processed only in memory.
 - Import dumps contain only safe identifiers, metadata, and a scoring scaffold;
   prompt and response content is excluded.
@@ -51,11 +51,11 @@ Report exports use only Rust standard-library I/O plus existing `serde_json`
 and `chrono` dependencies. PDF output is generated directly as PDF 1.4 with
 built-in Helvetica/WinAnsi resources, so no browser, office suite, or external
 process is required at runtime. Preferred HTML/PDF output defaults to
-`$NEBULAR_HOME/reports`; preferred Markdown/JSON/CSV defaults to stdout.
+`$NEBULA_HOME/reports`; preferred Markdown/JSON/CSV defaults to stdout.
 `--export` preserves the legacy current-directory file behavior.
 
 Release archives include the executable, license, README, all project docs,
-English/Spanish catalog sources, and the complete `skills/nebular` bundle,
+English/Spanish catalog sources, and the complete `skills/nebula` bundle,
 including host metadata. Runtime localization and report export remain
 self-contained inside the executable; catalogs in the archive are
 reference/source assets.
