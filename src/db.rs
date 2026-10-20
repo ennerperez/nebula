@@ -8,11 +8,32 @@ CREATE TABLE IF NOT EXISTS sessions(id TEXT PRIMARY KEY,started_at TEXT NOT NULL
 CREATE TABLE IF NOT EXISTS turns(id INTEGER PRIMARY KEY AUTOINCREMENT,session_id TEXT NOT NULL REFERENCES sessions(id),seq INTEGER NOT NULL,started_at TEXT NOT NULL,ended_at TEXT,task_type TEXT,outcome TEXT,UNIQUE(session_id,seq));
 CREATE TABLE IF NOT EXISTS keywords(id INTEGER PRIMARY KEY AUTOINCREMENT,word TEXT NOT NULL UNIQUE);
 CREATE TABLE IF NOT EXISTS turn_keywords(turn_id INTEGER NOT NULL REFERENCES turns(id),keyword_id INTEGER NOT NULL REFERENCES keywords(id),PRIMARY KEY(turn_id,keyword_id));
-CREATE TABLE IF NOT EXISTS metric_definitions(id INTEGER PRIMARY KEY AUTOINCREMENT,key TEXT NOT NULL UNIQUE,name TEXT NOT NULL,category TEXT NOT NULL,unit TEXT NOT NULL,better TEXT NOT NULL,parent_id INTEGER REFERENCES metric_definitions(id),weight REAL NOT NULL DEFAULT 1,aggregation TEXT NOT NULL DEFAULT 'sum',directional INTEGER NOT NULL DEFAULT 0,description TEXT,active INTEGER NOT NULL DEFAULT 1);
-CREATE TABLE IF NOT EXISTS metric_values(id INTEGER PRIMARY KEY AUTOINCREMENT,turn_id INTEGER NOT NULL REFERENCES turns(id),metric_id INTEGER NOT NULL REFERENCES metric_definitions(id),direction TEXT,source TEXT NOT NULL,value REAL NOT NULL,recorded_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS metric_definitions(id INTEGER PRIMARY KEY AUTOINCREMENT,key TEXT NOT NULL UNIQUE,name TEXT NOT NULL,category TEXT NOT NULL,unit TEXT NOT NULL,better TEXT NOT NULL CHECK(better IN('lower','higher')),parent_id INTEGER REFERENCES metric_definitions(id),weight REAL NOT NULL DEFAULT 1,aggregation TEXT NOT NULL DEFAULT 'sum',directional INTEGER NOT NULL DEFAULT 0,description TEXT,active INTEGER NOT NULL DEFAULT 1);
+CREATE TABLE IF NOT EXISTS metric_values(id INTEGER PRIMARY KEY AUTOINCREMENT,turn_id INTEGER NOT NULL REFERENCES turns(id),metric_id INTEGER NOT NULL REFERENCES metric_definitions(id),direction TEXT CHECK(direction IN('u2a','a2u') OR direction IS NULL),source TEXT NOT NULL CHECK(source IN('model','heuristic','hook','transcript','git')),value REAL NOT NULL,recorded_at TEXT NOT NULL);
 CREATE UNIQUE INDEX IF NOT EXISTS ux_metric_values ON metric_values(turn_id,metric_id,IFNULL(direction,''),source);
-CREATE TABLE IF NOT EXISTS heuristic_weights(metric_id INTEGER NOT NULL,direction TEXT NOT NULL,feature TEXT NOT NULL,weight REAL NOT NULL,PRIMARY KEY(metric_id,direction,feature));
-CREATE TABLE IF NOT EXISTS heuristic_calibration(metric_id INTEGER NOT NULL,direction TEXT NOT NULL,slope REAL NOT NULL,intercept REAL NOT NULL,correlation REAL,samples INTEGER NOT NULL,fitted_at TEXT NOT NULL,PRIMARY KEY(metric_id,direction));
+DROP TABLE IF EXISTS models_pricing;
+CREATE TABLE IF NOT EXISTS heuristic_weights(metric_id INTEGER NOT NULL REFERENCES metric_definitions(id),direction TEXT NOT NULL CHECK(direction IN('u2a','a2u')),feature TEXT NOT NULL,weight REAL NOT NULL,PRIMARY KEY(metric_id,direction,feature));
+CREATE TABLE IF NOT EXISTS heuristic_calibration(metric_id INTEGER NOT NULL REFERENCES metric_definitions(id),direction TEXT NOT NULL CHECK(direction IN('u2a','a2u')),slope REAL NOT NULL,intercept REAL NOT NULL,correlation REAL,samples INTEGER NOT NULL,fitted_at TEXT NOT NULL,PRIMARY KEY(metric_id,direction));
+CREATE TRIGGER IF NOT EXISTS validate_metric_definitions_insert BEFORE INSERT ON metric_definitions
+WHEN NEW.better NOT IN('lower','higher') BEGIN SELECT RAISE(ABORT,'invalid better'); END;
+CREATE TRIGGER IF NOT EXISTS validate_metric_definitions_update BEFORE UPDATE OF better ON metric_definitions
+WHEN NEW.better NOT IN('lower','higher') BEGIN SELECT RAISE(ABORT,'invalid better'); END;
+CREATE TRIGGER IF NOT EXISTS validate_metric_values_insert BEFORE INSERT ON metric_values
+WHEN (NEW.direction IS NOT NULL AND NEW.direction NOT IN('u2a','a2u'))
+  OR NEW.source NOT IN('model','heuristic','hook','transcript','git')
+BEGIN SELECT RAISE(ABORT,'invalid metric value protocol'); END;
+CREATE TRIGGER IF NOT EXISTS validate_metric_values_update BEFORE UPDATE OF direction,source ON metric_values
+WHEN (NEW.direction IS NOT NULL AND NEW.direction NOT IN('u2a','a2u'))
+  OR NEW.source NOT IN('model','heuristic','hook','transcript','git')
+BEGIN SELECT RAISE(ABORT,'invalid metric value protocol'); END;
+CREATE TRIGGER IF NOT EXISTS validate_heuristic_weights_insert BEFORE INSERT ON heuristic_weights
+WHEN NEW.direction NOT IN('u2a','a2u') BEGIN SELECT RAISE(ABORT,'invalid direction'); END;
+CREATE TRIGGER IF NOT EXISTS validate_heuristic_weights_update BEFORE UPDATE OF direction ON heuristic_weights
+WHEN NEW.direction NOT IN('u2a','a2u') BEGIN SELECT RAISE(ABORT,'invalid direction'); END;
+CREATE TRIGGER IF NOT EXISTS validate_heuristic_calibration_insert BEFORE INSERT ON heuristic_calibration
+WHEN NEW.direction NOT IN('u2a','a2u') BEGIN SELECT RAISE(ABORT,'invalid direction'); END;
+CREATE TRIGGER IF NOT EXISTS validate_heuristic_calibration_update BEFORE UPDATE OF direction ON heuristic_calibration
+WHEN NEW.direction NOT IN('u2a','a2u') BEGIN SELECT RAISE(ABORT,'invalid direction'); END;
 DROP VIEW IF EXISTS v_metric_values;
 CREATE VIEW v_metric_values AS
 SELECT v.id,v.turn_id,v.metric_id,v.direction,v.source,v.recorded_at,v.value raw_value,
@@ -75,6 +96,19 @@ pub(crate) fn initialize(connection: &Connection) -> Result<()> {
 }
 
 fn seed(connection: &Connection) -> Result<()> {
+    connection.execute_batch(
+        "DELETE FROM heuristic_weights WHERE metric_id IN(
+             SELECT id FROM metric_definitions WHERE key='cost_usd' OR key LIKE 'tokens_%'
+                OR key IN('tool_calls','files_changed','lines_added','lines_removed','tests_passed'));
+         DELETE FROM heuristic_calibration WHERE metric_id IN(
+             SELECT id FROM metric_definitions WHERE key='cost_usd' OR key LIKE 'tokens_%'
+                OR key IN('tool_calls','files_changed','lines_added','lines_removed','tests_passed'));
+         DELETE FROM metric_values WHERE metric_id IN(
+             SELECT id FROM metric_definitions WHERE key='cost_usd' OR key LIKE 'tokens_%'
+                OR key IN('tool_calls','files_changed','lines_added','lines_removed','tests_passed'));
+         DELETE FROM metric_definitions WHERE key='cost_usd' OR key LIKE 'tokens_%'
+             OR key IN('tool_calls','files_changed','lines_added','lines_removed','tests_passed');",
+    )?;
     let metrics = [
         (
             "estimated_seconds",
@@ -469,6 +503,72 @@ mod tests {
         assert_eq!(
             get_metric(&connection, turn, "real_seconds").unwrap(),
             Some(42.0)
+        );
+    }
+
+    #[test]
+    fn initialize_removes_obsolete_python_metrics_and_enforces_catalog_checks() {
+        let connection = memory_db();
+        connection
+            .execute(
+                "INSERT INTO metric_definitions(key,name,category,unit,better) VALUES('tokens_in','Tokens','usage','count','lower')",
+                [],
+            )
+            .unwrap();
+        initialize(&connection).unwrap();
+        assert_eq!(
+            connection
+                .query_row(
+                    "SELECT COUNT(*) FROM metric_definitions WHERE key='tokens_in'",
+                    [],
+                    |row| row.get::<_, i64>(0),
+                )
+                .unwrap(),
+            0
+        );
+        assert!(
+            connection
+                .execute(
+                    "INSERT INTO metric_definitions(key,name,category,unit,better) VALUES('invalid','Invalid','test','count','sideways')",
+                    [],
+                )
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn initialize_adds_protocol_validation_to_existing_unconstrained_database() {
+        let connection = Connection::open_in_memory().unwrap();
+        connection
+            .execute_batch(
+                "CREATE TABLE metric_definitions(
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,key TEXT NOT NULL UNIQUE,
+                    name TEXT NOT NULL,category TEXT NOT NULL,unit TEXT NOT NULL,
+                    better TEXT NOT NULL,parent_id INTEGER,weight REAL NOT NULL DEFAULT 1,
+                    aggregation TEXT NOT NULL DEFAULT 'sum',directional INTEGER NOT NULL DEFAULT 0,
+                    description TEXT,active INTEGER NOT NULL DEFAULT 1);",
+            )
+            .unwrap();
+
+        initialize(&connection).unwrap();
+
+        assert!(
+            connection
+                .execute(
+                    "INSERT INTO metric_definitions(key,name,category,unit,better) VALUES('invalid','Invalid','test','count','sideways')",
+                    [],
+                )
+                .is_err()
+        );
+        let turn = add_turn(&connection, "s1", 1, "2026-01-01T00:00:00.000Z");
+        assert!(
+            connection
+                .execute(
+                    "INSERT INTO metric_values(turn_id,metric_id,direction,source,value,recorded_at)
+                     VALUES(?1,(SELECT id FROM metric_definitions WHERE key='words_in'),'sideways','unknown',1,'2026-01-01T00:00:00Z')",
+                    [turn],
+                )
+                .is_err()
         );
     }
 

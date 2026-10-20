@@ -5,11 +5,18 @@ description: Record per-turn communication and efficiency metrics with the local
 
 # Nebula
 
-Run `nebula` from `PATH`. Nebula stores its database and transient state under
-`~/.nebula`; honor `NEBULA_HOME` when already set. The release installer can
-place this skill in standard Codex, Claude Code, Gemini CLI, OpenCode, and
-generic Agent Skills roots, or in explicit skill roots. Skill installation does
-not configure host hooks automatically.
+Run `nebula` from `PATH`. Derive the agent home from this installed skill path:
+the normal layout is `<agent-home>/skills/nebula/SKILL.md`. Pass that directory
+with `--agent-home <agent-home>` on every Nebula invocation so each agent
+installation uses `<agent-home>/nebula`. This CLI option works in POSIX shells
+and PowerShell. `NEBULA_HOME`, when already set, takes precedence and
+intentionally selects shared storage; never replace or synthesize it. The
+release installer can place this skill in standard Codex, Claude Code, Gemini
+CLI, OpenCode, and generic Agent Skills roots, or in explicit skill roots.
+Skill installation does not configure host hooks automatically.
+
+Commands below omit the repeated option for readability. Execute them as
+`nebula --agent-home "<agent-home>" ...`.
 
 ## Privacy invariant
 
@@ -148,7 +155,7 @@ summarize or retranslate it.
 
 - `md`, `json`, and `csv` write stdout unless `-o/--output` is given;
 - `html` and `pdf` create self-contained local files under
-  `~/.nebula/reports` unless an output path is given;
+  `<effective-nebula-home>/reports` unless an output path is given;
 - HTML has light/dark styling; JSON preserves the typed report model; CSV uses
   `section,direction,item,label,measure,value,text`; PDF needs no browser.
 
@@ -197,7 +204,7 @@ calibration. Reporting views include `v_turn_summary`, `v_nebulosity`,
 ## Clearing local data
 
 `nebula data clear --yes [--lang L]` permanently deletes Nebula's database,
-SQLite sidecars, transient session state, and generated reports under
-`NEBULA_HOME`. It does not delete host transcripts, exports outside those
-managed paths, the executable, or installed skills. Never run it unless the
-user explicitly requests deletion and confirms the target data directory.
+SQLite sidecars, transient session state, and generated reports under the
+effective Nebula home. It does not delete host transcripts, exports outside
+those managed paths, the executable, or installed skills. Never run it unless
+the user explicitly requests deletion and confirms the target data directory.

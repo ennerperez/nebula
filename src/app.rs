@@ -14,12 +14,13 @@ pub(crate) struct ClearResult {
 }
 
 impl App {
-    pub(crate) fn new() -> Result<Self> {
+    pub(crate) fn new(agent_home: Option<PathBuf>) -> Result<Self> {
         Ok(Self {
-            home: std::env::var_os("NEBULA_HOME")
-                .map(PathBuf::from)
-                .or_else(|| dirs::home_dir().map(|p| p.join(".nebula")))
-                .context("no home")?,
+            home: resolve_home(
+                environment_path("NEBULA_HOME").or_else(|| environment_path("NEBULAR_HOME")),
+                agent_home.or_else(|| environment_path("NEBULA_AGENT_HOME")),
+                dirs::home_dir(),
+            )?,
         })
     }
 
@@ -135,6 +136,33 @@ impl App {
     }
 }
 
+fn resolve_home(
+    explicit_home: Option<PathBuf>,
+    agent_home: Option<PathBuf>,
+    user_home: Option<PathBuf>,
+) -> Result<PathBuf> {
+    explicit_home
+        .or_else(|| agent_home.map(agent_data_home))
+        .or_else(|| user_home.map(|path| path.join(".agents/nebula")))
+        .context("no home")
+}
+
+fn environment_path(name: &str) -> Option<PathBuf> {
+    std::env::var_os(name)
+        .filter(|value| !value.is_empty())
+        .map(PathBuf::from)
+}
+
+fn agent_data_home(agent_home: PathBuf) -> PathBuf {
+    let current = agent_home.join("nebula");
+    let legacy = agent_home.join("nebular");
+    if !current.exists() && legacy.join("metrics.db").is_file() {
+        legacy
+    } else {
+        current
+    }
+}
+
 fn session_key(session: &str) -> String {
     if session.is_empty() {
         return "~00".into();
@@ -207,6 +235,52 @@ mod tests {
             22
         );
         fs::remove_dir_all(&app.home).unwrap();
+    }
+
+    #[test]
+    fn home_resolution_isolates_agents_and_honors_shared_override() {
+        let user_home = PathBuf::from("/users/demo");
+        let codex_home = PathBuf::from("/users/demo/.codex");
+        let claude_home = PathBuf::from("/users/demo/.claude");
+
+        assert_eq!(
+            resolve_home(None, Some(codex_home.clone()), Some(user_home.clone())).unwrap(),
+            codex_home.join("nebula")
+        );
+        assert_eq!(
+            resolve_home(None, Some(claude_home.clone()), Some(user_home.clone())).unwrap(),
+            claude_home.join("nebula")
+        );
+        assert_eq!(
+            resolve_home(None, None, Some(user_home.clone())).unwrap(),
+            user_home.join(".agents/nebula")
+        );
+
+        let shared = PathBuf::from("/shared/nebula");
+        assert_eq!(
+            resolve_home(Some(shared.clone()), Some(codex_home), Some(user_home)).unwrap(),
+            shared
+        );
+        assert!(resolve_home(None, None, None).is_err());
+    }
+
+    #[test]
+    fn home_resolution_reuses_original_python_database() {
+        let agent_home = test_app().home;
+        let legacy = agent_home.join("nebular");
+        fs::create_dir_all(&legacy).unwrap();
+        fs::write(legacy.join("metrics.db"), []).unwrap();
+
+        assert_eq!(
+            resolve_home(None, Some(agent_home.clone()), None).unwrap(),
+            legacy
+        );
+        fs::create_dir_all(agent_home.join("nebula")).unwrap();
+        assert_eq!(
+            resolve_home(None, Some(agent_home.clone()), None).unwrap(),
+            agent_home.join("nebula")
+        );
+        fs::remove_dir_all(agent_home).unwrap();
     }
 
     #[test]

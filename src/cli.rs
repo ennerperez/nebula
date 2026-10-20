@@ -5,6 +5,8 @@ use std::path::PathBuf;
 #[derive(Parser)]
 #[command(name = "nebula", version, about)]
 pub(crate) struct Cli {
+    #[arg(long, global = true, value_name = "PATH")]
+    pub(crate) agent_home: Option<PathBuf>,
     #[command(subcommand)]
     pub(crate) cmd: Cmd,
 }
@@ -355,8 +357,17 @@ mod tests {
                 }
             }
         ));
-        let hook =
-            Cli::try_parse_from(["nebula", "hook", "user-prompt-submit", "--lang", "es"]).unwrap();
+        let hook = Cli::try_parse_from([
+            "nebula",
+            "--agent-home",
+            "/tmp/codex",
+            "hook",
+            "user-prompt-submit",
+            "--lang",
+            "es",
+        ])
+        .unwrap();
+        assert_eq!(hook.agent_home, Some(PathBuf::from("/tmp/codex")));
         assert!(matches!(
             hook.cmd,
             Cmd::Hook {

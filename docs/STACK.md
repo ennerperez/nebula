@@ -13,8 +13,12 @@
 
 ## Runtime considerations
 
-- Default data directory is `~/.nebula`; `NEBULA_HOME` overrides it.
-- `data clear --yes` deletes only known managed entries inside `NEBULA_HOME`,
+- Agent-driven commands pass `--agent-home`; generated hooks may use the
+  equivalent `NEBULA_AGENT_HOME`. Their default data directory is
+  `<agent-home>/nebula`. Standalone commands default to `~/.agents/nebula`.
+  Explicit `NEBULA_HOME` takes precedence and selects shared storage.
+- `data clear --yes` deletes only known managed entries inside the effective
+  Nebula home,
   refuses filesystem roots, and runs before SQLite initialization so it does
   not recreate the database it removed.
 - Database schema and command output remain compatible with Python Nebula where practical.
@@ -64,7 +68,8 @@ Report exports use only Rust standard-library I/O plus existing `serde_json`
 and `chrono` dependencies. PDF output is generated directly as PDF 1.4 with
 built-in Helvetica/WinAnsi resources, so no browser, office suite, or external
 process is required at runtime. Preferred HTML/PDF output defaults to
-`$NEBULA_HOME/reports`; preferred Markdown/JSON/CSV defaults to stdout.
+`<effective-nebula-home>/reports`; preferred Markdown/JSON/CSV defaults to
+stdout.
 `--export` preserves the legacy current-directory file behavior.
 
 Release archives include the executable, license, README, all project docs,

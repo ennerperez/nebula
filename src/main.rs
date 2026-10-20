@@ -42,11 +42,11 @@ fn main() -> Result<()> {
         }
         return Ok(());
     }
-    let app = App::new()?;
+    let app = App::new(cli.agent_home.clone())?;
     if let Cmd::Data { cmd } = &cli.cmd {
         match cmd {
             DataCmd::Clear { yes, lang } => {
-                let environment = std::env::var("NEBULA_LANG").ok();
+                let environment = environment_language();
                 let localizer = Localizer::resolve(*lang, None, environment.as_deref())?;
                 if !yes {
                     bail!(localizer.text("data.confirmation"));
@@ -240,7 +240,7 @@ fn resolve_language(
     let stored = session
         .as_deref()
         .and_then(|session| app.session_language(session));
-    let environment = std::env::var("NEBULA_LANG").ok();
+    let environment = environment_language();
     let localizer = Localizer::resolve(explicit, stored.as_deref(), environment.as_deref())?;
     if explicit.is_some()
         && let Some(session) = session
@@ -248,6 +248,12 @@ fn resolve_language(
         app.save_session_language(&session, localizer.lang())?;
     }
     Ok(localizer)
+}
+
+fn environment_language() -> Option<String> {
+    std::env::var("NEBULA_LANG")
+        .ok()
+        .or_else(|| std::env::var("NEBULAR_LANG").ok())
 }
 
 #[cfg(test)]

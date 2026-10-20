@@ -80,13 +80,17 @@ that drops and recreates views at each database open. Domain concepts are mostly
 represented as SQL rows, strings, tuples, and `BTreeMap<String, f64>` rather than
 typed records. All major workflows accept a concrete `rusqlite::Connection`.
 
-State outside SQLite is session-scoped JSON and language files under
-`$NEBULA_HOME/state`, managed directly by [`App`](../src/app.rs#L7). Historical
-transcripts remain external and are read on demand.
+State outside SQLite is session-scoped JSON and language files under the
+effective Nebula home, managed directly by [`App`](../src/app.rs#L7). Explicit
+`NEBULA_HOME` selects shared storage; otherwise `--agent-home` (or the hook
+equivalent `NEBULA_AGENT_HOME`) isolates storage below the invoking agent root,
+with `~/.agents/nebula` as the standalone fallback. Historical transcripts
+remain external and are read on demand.
 
 The destructive `data clear` path is dispatched before database initialization.
-It removes only named Nebula-managed entries under `NEBULA_HOME`, preserving
-the directory itself, unrelated files, and external transcript sources.
+It removes only named Nebula-managed entries under the effective Nebula home,
+preserving the directory itself, unrelated files, and external transcript
+sources.
 
 ### Existing testing seams
 

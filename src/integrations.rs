@@ -40,10 +40,22 @@ pub(crate) fn configure_claude(settings: &Path, binary: &Path) -> Result<Configu
         .as_object_mut()
         .context("Claude settings 'hooks' must be a JSON object")?;
 
+    let agent_home = settings
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+        .unwrap_or_else(|| Path::new("."));
+    let quoted_agent_home = shell_quote(
+        agent_home
+            .to_str()
+            .context("Claude settings directory must be valid UTF-8")?,
+    );
     let quoted_binary = shell_quote(binary);
     let mut changed = false;
     for event in EVENTS {
-        let command = format!("{quoted_binary} hook {}", event_name(event));
+        let command = format!(
+            "NEBULA_AGENT_HOME={quoted_agent_home} {quoted_binary} hook {}",
+            event_name(event)
+        );
         changed |= merge_hook(hooks, event, &command)?;
     }
     if !changed {
@@ -135,9 +147,13 @@ fn is_nebula_hook(command: &str, event: &str) -> bool {
     let trimmed = command.trim();
     trimmed.ends_with(&format!("hook {event}"))
         && trimmed.rsplit_once(" hook ").is_some_and(|(program, _)| {
+            let program = program.split_whitespace().next_back().unwrap_or(program);
             matches!(
-                program.trim_matches(['\'', '"']).rsplit(['/', '\\']).next(),
-                Some("nebula" | "nebula.exe")
+                program
+                    .rsplit(['/', '\\'])
+                    .next()
+                    .map(|name| name.trim_matches(['\'', '"'])),
+                Some("nebula" | "nebula.exe" | "nebular.py")
             )
         })
 }
@@ -260,7 +276,11 @@ mod tests {
         assert_eq!(value["permissions"]["allow"][0], "Bash(git status)");
         assert_eq!(value["hooks"]["Stop"].as_array().unwrap().len(), 2);
         for event in EVENTS {
-            let expected = format!("'/opt/Nebula Tools/nebula' hook {}", event_name(event));
+            let expected = format!(
+                "NEBULA_AGENT_HOME='{}' '/opt/Nebula Tools/nebula' hook {}",
+                root.display(),
+                event_name(event)
+            );
             assert!(
                 value["hooks"][event]
                     .as_array()
@@ -289,7 +309,7 @@ mod tests {
         let settings = root.join("settings.json");
         fs::write(
             &settings,
-            r#"{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"nebula hook stop"},{"type":"command","command":"nebula hook stop"}]}]}}"#,
+            r#"{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"nebula hook stop"},{"type":"command","command":"python3 '/home/demo/.claude-alt/skills/nebular/nebular.py' hook stop"}]}]}}"#,
         )
         .unwrap();
         configure_claude(&settings, Path::new("/custom/bin/nebula")).unwrap();
@@ -312,6 +332,10 @@ mod tests {
         );
         assert!(is_nebula_hook(
             r#""C:\Nebula Tools\nebula.exe" hook stop"#,
+            "stop"
+        ));
+        assert!(is_nebula_hook(
+            "python3 '/home/demo/.claude-alt/skills/nebular/nebular.py' hook stop",
             "stop"
         ));
     }

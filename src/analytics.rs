@@ -1429,7 +1429,7 @@ mod tests {
                 ("agents", 1.0),
                 ("corrections", 1.0),
             ] {
-                db::put_metric(connection, turn, key, value, "test", None).unwrap();
+                db::put_metric(connection, turn, key, value, "hook", None).unwrap();
             }
             for key in KEYS {
                 db::put_metric(

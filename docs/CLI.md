@@ -114,13 +114,13 @@ CLAUDE_CONFIG_DIR="$HOME/.claude2" \
 In `auto` mode, Nebula detects an agent when its executable or configuration
 directory exists. It installs the skill to:
 
-| Agent | Skill directory |
-| --- | --- |
-| Codex | `${CODEX_HOME:-~/.codex}/skills/nebula` |
-| Claude Code | `${CLAUDE_CONFIG_DIR:-~/.claude}/skills/nebula` |
-| Gemini CLI | `${GEMINI_CLI_HOME:-~}/.gemini/skills/nebula` |
-| OpenCode | `${XDG_CONFIG_HOME:-~/.config}/opencode/skills/nebula` |
-| Generic fallback | `~/.agents/skills/nebula` |
+| Agent | Skill directory | Default data directory |
+| --- | --- | --- |
+| Codex | `${CODEX_HOME:-~/.codex}/skills/nebula` | `${CODEX_HOME:-~/.codex}/nebula` |
+| Claude Code | `${CLAUDE_CONFIG_DIR:-~/.claude}/skills/nebula` | `${CLAUDE_CONFIG_DIR:-~/.claude}/nebula` |
+| Gemini CLI | `${GEMINI_CLI_HOME:-~}/.gemini/skills/nebula` | `${GEMINI_CLI_HOME:-~}/.gemini/nebula` |
+| OpenCode | `${XDG_CONFIG_HOME:-~/.config}/opencode/skills/nebula` | `${XDG_CONFIG_HOME:-~/.config}/opencode/nebula` |
+| Generic fallback | `~/.agents/skills/nebula` | `~/.agents/nebula` |
 
 When no supported agent is detected, installer uses generic location.
 `--agent all` targets every known agent location. `--agent none` disables skill
@@ -177,14 +177,23 @@ intact unless you run `nebula data clear --yes` first.
 
 ## Storage and configuration
 
-Nebula stores its database and transient per-session state under:
+Agent skill calls pass their installation root with `--agent-home`. Generated
+hooks may use the equivalent internal environment variable
+`NEBULA_AGENT_HOME`. Nebula appends `nebula`, giving every agent installation an
+independent data directory. For example, Codex stores:
 
 ```text
-~/.nebula/
+~/.codex/nebula/
 ├── metrics.db
 ├── reports/
 └── state/
 ```
+
+Standalone CLI calls without agent context use `~/.agents/nebula`. For a custom
+installation at `<agent-home>/skills/nebula`, pass
+`--agent-home <agent-home>`. When the original Python implementation's
+`<agent-home>/nebular/metrics.db` exists and the new directory does not, Nebula
+reuses that database in place.
 
 `reports/` is created on demand for preferred HTML and PDF output. Other
 preferred formats use stdout unless `--output` is given.
@@ -195,17 +204,22 @@ Permanently remove all paths managed inside this directory:
 nebula data clear --yes
 ```
 
-This deletes `metrics.db` and its SQLite sidecars, `state/`, and `reports/`.
-It leaves the data directory itself and unrelated files intact. It never removes
-Claude/Codex transcripts, exports written outside those managed paths, the
-Nebula executable, or installed skills. The command refuses to run without
-`--yes` and rejects a `NEBULA_HOME` resolving to a filesystem root.
+This deletes `metrics.db` and its SQLite sidecars, `state/`, and `reports/` from
+the effective Nebula home. It leaves that directory and unrelated files intact.
+It never removes Claude/Codex transcripts, exports written outside those
+managed paths, the Nebula executable, or installed skills. The command refuses
+to run without `--yes` and rejects an effective home resolving to a filesystem
+root.
 
-Set `NEBULA_HOME` to use another location:
+Set `NEBULA_HOME` explicitly when agents should use one shared location. It has
+priority over `--agent-home` and `NEBULA_AGENT_HOME`:
 
 ```sh
 NEBULA_HOME="$HOME/.local/share/nebula" nebula report
 ```
+
+`NEBULAR_HOME` remains a deprecated compatibility alias for the original Python
+skill. `NEBULA_HOME` wins when both exist.
 
 Database schema is created and seeded on first command execution, including
 commands such as `report` and `metrics list`.
@@ -214,9 +228,10 @@ commands such as `report` and `metrics list`.
 
 Commands that produce user-facing output accept `--lang en` or `--lang es`.
 Resolution order is explicit option, current session language, `NEBULA_LANG`,
-then English. An explicit language on a session command is persisted under
-`state/` for later hook output. Catalogs are complete and embedded; unknown
-language codes fail instead of mixing languages or silently falling back.
+deprecated `NEBULAR_LANG`, then English. An explicit language on a session
+command is persisted under `state/` for later hook output. Catalogs are complete
+and embedded; unknown language codes fail instead of mixing languages or
+silently falling back.
 
 ## Turn lifecycle
 
@@ -265,7 +280,7 @@ clamped to range 0 through 100.
 ## Command reference
 
 Run `nebula help <COMMAND>` for generated help. Global options are
-`-h, --help` and `-V, --version`.
+`--agent-home <PATH>`, `-h`/`--help`, and `-V`/`--version`.
 
 ### `nebula configure claude`
 
@@ -362,9 +377,9 @@ matching turns. With no rows, output is `no data`.
 
 `--format` is the preferred interface. Markdown, structured JSON, and tidy CSV
 go to stdout by default. Standalone HTML and portable PDF always create local
-files, defaulting to safe timestamped names under `~/.nebula/reports` (or
-`$NEBULA_HOME/reports`). `-o`/`--output` selects an exact destination for any
-format; with no format it writes Markdown. HTML is self-contained with
+files, defaulting to safe timestamped names under
+`<effective-nebula-home>/reports`. `-o`/`--output` selects an exact destination
+for any format; with no format it writes Markdown. HTML is self-contained with
 light/dark styling. PDF is generated without a browser or network. CSV uses:
 
 ```text

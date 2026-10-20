@@ -19,7 +19,7 @@ Download the installer before running it:
 
 ```sh
 curl --proto '=https' --tlsv1.2 -fsSLO \
-  https://raw.githubusercontent.com/ennerperez/nebula/develop/install.sh
+  https://raw.githubusercontent.com/ennerperez/nebula/master/install.sh
 sh install.sh
 ```
 
@@ -36,9 +36,14 @@ Select targets or paths explicitly when needed:
 ```sh
 sh install.sh --agent codex
 sh install.sh --agent claude --agent gemini
-sh install.sh --bin-dir "$HOME/bin" --skill-dir "$HOME/my-agent/skills"
-CLAUDE_CONFIG_DIR="$HOME/.claude2" \
-  sh install.sh --agent claude --bin-dir "$HOME/bin"
+```
+
+Or use custom paths:
+
+```sh
+sh install.sh --bin-dir "$HOME/.local/bin" --skill-dir "$HOME/.claude-custom/skills"
+CLAUDE_CONFIG_DIR="$HOME/.claude-custom" \
+  sh install.sh --agent claude --bin-dir "$HOME/.local/bin"
 ```
 
 See [CLI guide](docs/CLI.md#installation) for supported platforms, every
@@ -53,6 +58,11 @@ nebula report --days 7 --lang en
 nebula tips --both --share 0.3
 nebula report --days 30 --format html
 ```
+
+Each installed agent skill stores data below its own agent home, such as
+`~/.codex/nebula` or `~/.claude/nebula`. Set `NEBULA_HOME` explicitly when
+multiple agents should use one shared database. Standalone CLI calls without
+agent context use `~/.agents/nebula`.
 
 The Agent Skill defines the per-turn workflow: a host hook opens the turn,
 the agent records its estimate and clarity scores with `log-start`, and it
