@@ -7,7 +7,16 @@ use std::{
     sync::atomic::{AtomicU64, Ordering},
 };
 
-const EVENTS: [&str; 3] = ["UserPromptSubmit", "Stop", "Notification"];
+const CLAUDE_EVENTS: [(&str, &str); 3] = [
+    ("UserPromptSubmit", "user-prompt-submit"),
+    ("Stop", "stop"),
+    ("Notification", "notification"),
+];
+const CODEX_EVENTS: [(&str, &str); 3] = [
+    ("UserPromptSubmit", "user-prompt-submit"),
+    ("Stop", "stop"),
+    ("PermissionRequest", "notification"),
+];
 static NEXT_TEMPORARY: AtomicU64 = AtomicU64::new(0);
 
 pub(crate) struct ConfigureResult {
@@ -16,6 +25,19 @@ pub(crate) struct ConfigureResult {
 }
 
 pub(crate) fn configure_claude(settings: &Path, binary: &Path) -> Result<ConfigureResult> {
+    configure_hooks(settings, binary, "Claude", &CLAUDE_EVENTS)
+}
+
+pub(crate) fn configure_codex(hooks: &Path, binary: &Path) -> Result<ConfigureResult> {
+    configure_hooks(hooks, binary, "Codex", &CODEX_EVENTS)
+}
+
+fn configure_hooks(
+    settings: &Path,
+    binary: &Path,
+    host: &str,
+    events: &[(&str, &str)],
+) -> Result<ConfigureResult> {
     let binary = binary
         .to_str()
         .context("Nebula binary path must be valid UTF-8")?;
@@ -38,7 +60,7 @@ pub(crate) fn configure_claude(settings: &Path, binary: &Path) -> Result<Configu
         .entry("hooks")
         .or_insert_with(|| Value::Object(Map::new()))
         .as_object_mut()
-        .context("Claude settings 'hooks' must be a JSON object")?;
+        .with_context(|| format!("{host} settings 'hooks' must be a JSON object"))?;
 
     let agent_home = settings
         .parent()
@@ -47,16 +69,14 @@ pub(crate) fn configure_claude(settings: &Path, binary: &Path) -> Result<Configu
     let quoted_agent_home = shell_quote(
         agent_home
             .to_str()
-            .context("Claude settings directory must be valid UTF-8")?,
+            .with_context(|| format!("{host} settings directory must be valid UTF-8"))?,
     );
     let quoted_binary = shell_quote(binary);
     let mut changed = false;
-    for event in EVENTS {
-        let command = format!(
-            "NEBULA_AGENT_HOME={quoted_agent_home} {quoted_binary} hook {}",
-            event_name(event)
-        );
-        changed |= merge_hook(hooks, event, &command)?;
+    for (event, nebula_event) in events {
+        let command =
+            format!("NEBULA_AGENT_HOME={quoted_agent_home} {quoted_binary} hook {nebula_event}");
+        changed |= merge_hook(hooks, event, nebula_event, &command, host)?;
     }
     if !changed {
         return Ok(ConfigureResult {
@@ -91,13 +111,18 @@ pub(crate) fn configure_claude(settings: &Path, binary: &Path) -> Result<Configu
     })
 }
 
-fn merge_hook(hooks: &mut Map<String, Value>, event: &str, command: &str) -> Result<bool> {
+fn merge_hook(
+    hooks: &mut Map<String, Value>,
+    event: &str,
+    nebula_event: &str,
+    command: &str,
+    host: &str,
+) -> Result<bool> {
     let entries = hooks
         .entry(event)
         .or_insert_with(|| Value::Array(Vec::new()))
         .as_array_mut()
-        .with_context(|| format!("Claude hook '{event}' must be an array"))?;
-    let event_name = event_name(event);
+        .with_context(|| format!("{host} hook '{event}' must be an array"))?;
     let mut found = false;
     let mut changed = false;
 
@@ -109,7 +134,7 @@ fn merge_hook(hooks: &mut Map<String, Value>, event: &str, command: &str) -> Res
             let Some(existing) = hook.get("command").and_then(Value::as_str) else {
                 return true;
             };
-            if !is_nebula_hook(existing, event_name) {
+            if !is_nebula_hook(existing, nebula_event) {
                 return true;
             }
             if found {
@@ -156,15 +181,6 @@ fn is_nebula_hook(command: &str, event: &str) -> bool {
                 Some("nebula" | "nebula.exe" | "nebular.py")
             )
         })
-}
-
-fn event_name(event: &str) -> &'static str {
-    match event {
-        "UserPromptSubmit" => "user-prompt-submit",
-        "Stop" => "stop",
-        "Notification" => "notification",
-        _ => unreachable!("fixed event list"),
-    }
 }
 
 fn shell_quote(value: &str) -> String {
@@ -275,11 +291,11 @@ mod tests {
         let value: Value = serde_json::from_slice(&fs::read(&settings).unwrap()).unwrap();
         assert_eq!(value["permissions"]["allow"][0], "Bash(git status)");
         assert_eq!(value["hooks"]["Stop"].as_array().unwrap().len(), 2);
-        for event in EVENTS {
+        for (event, nebula_event) in CLAUDE_EVENTS {
             let expected = format!(
                 "NEBULA_AGENT_HOME='{}' '/opt/Nebula Tools/nebula' hook {}",
                 root.display(),
-                event_name(event)
+                nebula_event
             );
             assert!(
                 value["hooks"][event]
@@ -338,5 +354,46 @@ mod tests {
             "python3 '/home/demo/.claude-alt/skills/nebular/nebular.py' hook stop",
             "stop"
         ));
+    }
+
+    #[test]
+    fn configures_codex_hooks_and_preserves_existing_entries() {
+        let root = test_dir();
+        fs::create_dir_all(&root).unwrap();
+        let hooks = root.join("hooks.json");
+        fs::write(
+            &hooks,
+            r#"{"description":"keep","hooks":{"Stop":[{"hooks":[{"type":"command","command":"notify-send done"}]}]}}"#,
+        )
+        .unwrap();
+
+        let result = configure_codex(&hooks, Path::new("/opt/nebula")).unwrap();
+        assert!(result.changed);
+        assert_eq!(result.backup, Some(root.join("hooks.json.bak-nebula")));
+        let value: Value = serde_json::from_slice(&fs::read(&hooks).unwrap()).unwrap();
+        assert_eq!(value["description"], "keep");
+        assert_eq!(value["hooks"]["Stop"].as_array().unwrap().len(), 2);
+        for (event, nebula_event) in CODEX_EVENTS {
+            let expected = format!(
+                "NEBULA_AGENT_HOME='{}' '/opt/nebula' hook {nebula_event}",
+                root.display()
+            );
+            assert!(
+                value["hooks"][event]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .any(|entry| entry["hooks"]
+                        .as_array()
+                        .unwrap()
+                        .iter()
+                        .any(|hook| hook["command"].as_str() == Some(expected.as_str())))
+            );
+        }
+
+        let second = configure_codex(&hooks, Path::new("/opt/nebula")).unwrap();
+        assert!(!second.changed);
+        assert!(second.backup.is_none());
+        fs::remove_dir_all(root).unwrap();
     }
 }

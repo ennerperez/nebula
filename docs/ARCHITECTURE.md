@@ -38,7 +38,7 @@ The crate is a single binary with modules declared by the composition root in
 | Analytics | `analytics.rs` | Filtering, SQL projections, aggregate analysis, typed report assembly, recommendation ingestion, numeric tip windows/gating, estimates, localized console output |
 | Learning | `learning.rs` | Calibration queries, transcript rediscovery/reconstruction, feature extraction, ridge regression/CV, model persistence, heuristic replacement |
 | Historical import | `import.rs` | Transcript discovery and Claude/Codex parsing, turn reconstruction, metadata discovery, scoring, transactional persistence, safe dump and score import |
-| Host integration | `integrations.rs` | Safe, idempotent Claude Code settings merge, backup, and lifecycle hook configuration |
+| Host integration | `integrations.rs` | Safe, idempotent Codex/Claude Code settings merge, backup, and lifecycle hook configuration |
 | Export | `export.rs` | Typed report model, five renderers, preferred/legacy destination policy, file naming and no-overwrite writes |
 | Localization | `i18n.rs` | Language selection, embedded catalog validation, key lookup and interpolation |
 

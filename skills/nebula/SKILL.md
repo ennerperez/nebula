@@ -13,7 +13,9 @@ and PowerShell. `NEBULA_HOME`, when already set, takes precedence and
 intentionally selects shared storage; never replace or synthesize it. The
 release installer can place this skill in standard Codex, Claude Code, Gemini
 CLI, OpenCode, and generic Agent Skills roots, or in explicit skill roots.
-Skill installation does not configure host hooks automatically.
+The release installer configures lifecycle hooks automatically for detected or
+selected Codex and Claude Code installations. Other hosts still require manual
+hook integration.
 
 Commands below omit the repeated option for readability. Execute them as
 `nebula --agent-home "<agent-home>" ...`.

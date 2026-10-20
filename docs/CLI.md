@@ -68,11 +68,11 @@ By default the installer:
 5. installs the CLI to `~/.local/bin` and verifies `nebula --version`;
 6. detects installed AI agents and copies the bundled Nebula skill to each
    detected user-level skills directory;
-7. configures `UserPromptSubmit`, `Stop`, and `Notification` hooks when Claude
-   Code is selected or detected.
+7. configures `UserPromptSubmit`, `Stop`, and permission-wait hooks when Codex
+   or Claude Code is selected or detected.
 
 The script verifies checksums before extraction, then runs the installed Nebula
-binary to verify its version and configure Claude hooks. If `~/.local/bin` is
+binary to verify its version and configure supported host hooks. If `~/.local/bin` is
 not on `PATH`, it prints a reminder after installation.
 
 Installer options:
@@ -86,7 +86,7 @@ Installer options:
 --skill-dir <path>     Additional skills root; may be repeated
 --no-cli               Install only the skill
 --no-skill             Install only the CLI
---no-hooks             Do not configure Claude Code lifecycle hooks
+--no-hooks             Do not configure Codex or Claude Code lifecycle hooks
 -h, --help             Print installer help
 ```
 
@@ -130,6 +130,11 @@ When no supported agent is detected, installer uses generic location.
 `--agent all` targets every known agent location. `--agent none` disables skill
 installation unless explicit `--skill-dir` targets were also supplied.
 
+For Codex, the installer merges hooks into `${CODEX_HOME:-~/.codex}/hooks.json`,
+preserves unrelated entries, and creates `hooks.json.bak-nebula` before its
+first change. Restart Codex, then use `/hooks` to review and trust the exact
+installed definitions; Codex intentionally skips untrusted hooks.
+
 For Claude Code, the installer merges hooks into
 `${CLAUDE_CONFIG_DIR:-~/.claude}/settings.json`, preserves unrelated settings
 and hooks, and creates `settings.json.bak-nebula` before its first change. Hook
@@ -137,8 +142,8 @@ commands use the absolute installed binary path, so custom `--bin-dir` values do
 not depend on Claude's `PATH`. Repeated installs are idempotent. Use
 `--no-hooks` to opt out. A skill-only install reuses `nebula` from `PATH`; if no
 binary is available, it leaves hooks unchanged and prints a notice.
-Restart Claude Code after the installer changes hook configuration; recording
-starts with the next submitted prompt.
+Restart the host after the installer changes hook configuration; recording
+starts with the next submitted prompt after any required trust review.
 
 Other hosts must invoke `nebula hook` at prompt, stop, and notification events
 where supported.
@@ -300,6 +305,23 @@ nebula configure claude \
 The command accepts a missing settings file, rejects malformed JSON without
 changing it, creates a one-time `.bak-nebula` backup, replaces legacy bare
 `nebula hook ...` entries, removes duplicate Nebula entries, and is idempotent.
+
+### `nebula configure codex`
+
+Merges Nebula's Codex lifecycle hooks into the user-level hooks file without
+removing unrelated definitions:
+
+```sh
+nebula configure codex \
+  --hooks "$CODEX_HOME/hooks.json" \
+  --binary "$HOME/bin/nebula"
+```
+
+It installs `UserPromptSubmit` and `Stop` directly. Codex
+`PermissionRequest` is mapped to Nebula's notification event for wait-time
+tracking. Missing files are created, malformed JSON is rejected unchanged,
+the first replacement creates a `.bak-nebula` backup, and repeated runs are
+idempotent. See the [official Codex hooks documentation](https://developers.openai.com/codex/hooks).
 
 ### `nebula data clear`
 

@@ -12,6 +12,7 @@ INSTALL_CLI=1
 INSTALL_SKILL=1
 INSTALL_HOOKS=1
 CLAUDE_SELECTED=0
+CODEX_SELECTED=0
 SKILL_ROOTS=
 TMP_DIR=
 INSTALLED_CLI=
@@ -33,7 +34,7 @@ Options:
                          May be repeated.
   --no-cli               Do not install the CLI.
   --no-skill             Do not install the Agent Skill.
-  --no-hooks             Do not configure Claude Code lifecycle hooks.
+  --no-hooks             Do not configure Codex or Claude Code lifecycle hooks.
   -h, --help             Show this help.
 
 Environment overrides:
@@ -81,7 +82,10 @@ $root"
 add_agent() {
     agent=$1
     case "$agent" in
-        codex) append_skill_root "${CODEX_HOME:-${HOME:-}/.codex}/skills" ;;
+        codex)
+            append_skill_root "${CODEX_HOME:-${HOME:-}/.codex}/skills"
+            CODEX_SELECTED=1
+            ;;
         claude)
             append_skill_root "${CLAUDE_CONFIG_DIR:-${HOME:-}/.claude}/skills"
             CLAUDE_SELECTED=1
@@ -356,13 +360,24 @@ if [ "$INSTALL_SKILL" -eq 1 ]; then
     IFS=$old_ifs
 fi
 
-if [ "$INSTALL_SKILL" -eq 1 ] && [ "$INSTALL_HOOKS" -eq 1 ] && [ "$CLAUDE_SELECTED" -eq 1 ]; then
+if [ "$INSTALL_SKILL" -eq 1 ] && [ "$INSTALL_HOOKS" -eq 1 ] && \
+    { [ "$CODEX_SELECTED" -eq 1 ] || [ "$CLAUDE_SELECTED" -eq 1 ]; }; then
     hook_binary=$INSTALLED_CLI
     if [ -z "$hook_binary" ] && command -v "$PROGRAM" >/dev/null 2>&1; then
         discovered_binary=$(command -v "$PROGRAM")
         hook_binary="$(cd "$(dirname "$discovered_binary")" && pwd -P)/$(basename "$discovered_binary")"
     fi
-    if [ -n "$hook_binary" ]; then
+    if [ -n "$hook_binary" ] && [ "$CODEX_SELECTED" -eq 1 ]; then
+        codex_hooks="${CODEX_HOME:-$HOME/.codex}/hooks.json"
+        if "$hook_binary" configure codex --help >/dev/null 2>&1; then
+            "$hook_binary" configure codex \
+                --hooks "$codex_hooks" \
+                --binary "$hook_binary"
+        else
+            note "Codex hooks were not configured because this Nebula version does not support automatic setup."
+        fi
+    fi
+    if [ -n "$hook_binary" ] && [ "$CLAUDE_SELECTED" -eq 1 ]; then
         claude_settings="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/settings.json"
         if "$hook_binary" configure claude --help >/dev/null 2>&1; then
             "$hook_binary" configure claude \
@@ -371,7 +386,8 @@ if [ "$INSTALL_SKILL" -eq 1 ] && [ "$INSTALL_HOOKS" -eq 1 ] && [ "$CLAUDE_SELECT
         else
             note "Claude hooks were not configured because this Nebula version does not support automatic setup."
         fi
-    else
-        note "Claude hooks were not configured because '$PROGRAM' is not installed or on PATH."
+    fi
+    if [ -z "$hook_binary" ]; then
+        note "Lifecycle hooks were not configured because '$PROGRAM' is not installed or on PATH."
     fi
 fi

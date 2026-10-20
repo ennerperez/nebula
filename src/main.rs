@@ -27,6 +27,18 @@ fn main() -> Result<()> {
     let cli = Cli::parse();
     if let Cmd::Configure { cmd } = &cli.cmd {
         match cmd {
+            ConfigureCmd::Codex { hooks, binary } => {
+                let result = integrations::configure_codex(hooks, binary)?;
+                if result.changed {
+                    println!("Configured Codex hooks: {}", hooks.display());
+                    if let Some(backup) = result.backup {
+                        println!("Backup: {}", backup.display());
+                    }
+                    println!("Restart Codex, then review and trust the Nebula hooks with /hooks.");
+                } else {
+                    println!("Codex hooks already configured: {}", hooks.display());
+                }
+            }
             ConfigureCmd::Claude { settings, binary } => {
                 let result = integrations::configure_claude(settings, binary)?;
                 if result.changed {

@@ -30,10 +30,10 @@
   agent integrations pass explicit `--host`, ambiguous or unknown hosts fail
   closed, and `NEBULA_TRANSCRIPTS` remains the explicit discovery override.
 - Hook failures print an error to stderr and exit successfully so metrics cannot break host sessions.
-- Claude Code integration merges hooks into its JSON settings through a
-  temporary-file replacement, preserves unrelated configuration, creates a
-  one-time backup, and records an absolute Nebula binary path so custom install
-  directories work without `PATH`.
+- Codex and Claude Code integrations merge hooks into their JSON configuration
+  through temporary-file replacement, preserve unrelated configuration, create
+  a one-time backup, and record an absolute Nebula binary path so custom install
+  directories work without `PATH`. Codex hook trust remains host-controlled.
 - Tips are agent-authored transient text, limited to 90 characters and gated by
   current-versus-recent same-session `u2a`; no automatic tip catalog is shipped.
 - English and Spanish catalogs are compiled into the binary with `include_str!`;
@@ -58,8 +58,8 @@
   and heuristic calibration.
 - `src/import.rs`: Claude/Codex transcript discovery, privacy-safe historical
   reconstruction, safe dump serialization, and reviewed-score import.
-- `src/integrations.rs`: host configuration merging and safe Claude Code hook
-  installation.
+- `src/integrations.rs`: host configuration merging and safe Codex/Claude Code
+  hook installation.
 - `src/export.rs`: typed report model, local Markdown, standalone HTML,
   structured JSON, tidy CSV, and dependency-free PDF serialization with
   preferred/legacy destination policy and no-overwrite file creation.

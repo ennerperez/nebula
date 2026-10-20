@@ -163,6 +163,10 @@ fn user_prompt(
 }
 
 fn notification(app: &App, session: &str, payload: &Value) -> Result<()> {
+    let hook_event = payload
+        .get("hook_event_name")
+        .and_then(Value::as_str)
+        .unwrap_or("");
     let kind = format!(
         "{} {}",
         payload
@@ -171,7 +175,7 @@ fn notification(app: &App, session: &str, payload: &Value) -> Result<()> {
             .unwrap_or(""),
         payload.get("message").and_then(Value::as_str).unwrap_or("")
     );
-    if !kind.to_lowercase().contains("permission") {
+    if hook_event != "PermissionRequest" && !kind.to_lowercase().contains("permission") {
         return Ok(());
     }
     let mut state = app.load_state(session);
@@ -894,9 +898,17 @@ mod tests {
             &english(),
         )
         .unwrap();
+        handle(
+            &app,
+            &connection,
+            Event::Notification,
+            json!({"session_id":"s","hook_event_name":"PermissionRequest"}),
+            &english(),
+        )
+        .unwrap();
         assert_eq!(
             app.load_state("s")["waits"].as_array().map(Vec::len),
-            Some(1)
+            Some(2)
         );
         handle(&app, &connection, Event::Stop, json!({"session_id":"s","transcript_path":transcript,"last_assistant_message":"intermediate"}), &english()).unwrap();
         assert_eq!(open_turn(&connection, Some("s")).unwrap().0, turn);

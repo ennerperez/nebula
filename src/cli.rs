@@ -138,6 +138,12 @@ pub(crate) enum Cmd {
 
 #[derive(Subcommand)]
 pub(crate) enum ConfigureCmd {
+    Codex {
+        #[arg(long, value_name = "PATH")]
+        hooks: PathBuf,
+        #[arg(long, value_name = "PATH")]
+        binary: PathBuf,
+    },
     Claude {
         #[arg(long, value_name = "PATH")]
         settings: PathBuf,
@@ -349,6 +355,23 @@ mod tests {
             Cmd::Configure {
                 cmd: ConfigureCmd::Claude { settings, binary }
             } if settings == PathBuf::from("/tmp/claude/settings.json")
+                && binary == PathBuf::from("/opt/nebula/bin/nebula")
+        ));
+        let configure = Cli::try_parse_from([
+            "nebula",
+            "configure",
+            "codex",
+            "--hooks",
+            "/tmp/codex/hooks.json",
+            "--binary",
+            "/opt/nebula/bin/nebula",
+        ])
+        .unwrap();
+        assert!(matches!(
+            configure.cmd,
+            Cmd::Configure {
+                cmd: ConfigureCmd::Codex { hooks, binary }
+            } if hooks == PathBuf::from("/tmp/codex/hooks.json")
                 && binary == PathBuf::from("/opt/nebula/bin/nebula")
         ));
         let data =
