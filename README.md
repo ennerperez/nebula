@@ -26,7 +26,10 @@ sh install.sh
 The installer selects the matching GitHub release, verifies its SHA-256
 checksum, installs `nebula` to `~/.local/bin`, and installs the bundled skill
 for detected AI agents. It supports Codex, Claude Code, Gemini CLI, OpenCode,
-and the generic Agent Skills directory.
+and the generic Agent Skills directory. When Claude Code is selected or
+detected, it also configures Nebula's lifecycle hooks automatically.
+Restart Claude Code after first installation so the hooks load; the next prompt
+starts recording data.
 
 Select targets or paths explicitly when needed:
 
@@ -34,6 +37,8 @@ Select targets or paths explicitly when needed:
 sh install.sh --agent codex
 sh install.sh --agent claude --agent gemini
 sh install.sh --bin-dir "$HOME/bin" --skill-dir "$HOME/my-agent/skills"
+CLAUDE_CONFIG_DIR="$HOME/.claude2" \
+  sh install.sh --agent claude --bin-dir "$HOME/bin"
 ```
 
 See [CLI guide](docs/CLI.md#installation) for supported platforms, every
@@ -55,12 +60,16 @@ checks `tips` before closing its model-side work with `log-end`. Live tips are
 agent-written, limited to 90 characters, and displayed only when the current
 prompt scores worse than its same-session baseline. The host stop hook records
 elapsed time and response measurements. Installing the skill does not modify
-agent hook configuration.
+hook configuration for generic hosts; the release installer configures Claude
+Code hooks automatically.
 
 ## Commands
 
 Implemented commands:
 
+- `configure claude` safely merges lifecycle hooks into Claude Code settings.
+- `data clear --yes` permanently removes Nebula-managed local data without
+  touching external transcripts, the CLI, or installed skills.
 - `hook <EVENT>` processes `user-prompt-submit`, `stop`, or `notification`
   events from JSON on stdin.
 - `log-start` records an estimate, keywords, task metadata, and user-to-agent

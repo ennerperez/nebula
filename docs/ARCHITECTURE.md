@@ -30,7 +30,7 @@ The crate is a single binary with modules declared by the composition root in
 | --- | --- | --- |
 | Entrypoint | `main.rs` | Parse CLI, open application state and database, resolve language, dispatch every command, adapt hook failures |
 | CLI contract | `cli.rs` | `clap` command tree, value types, validation helpers |
-| Runtime context | `app.rs` | Resolve home, open/initialize SQLite, read/write session JSON and language files |
+| Runtime context | `app.rs` | Resolve home, open/initialize SQLite, read/write session JSON and language files, safely clear managed local data |
 | Persistence | `db.rs` | Schema and views, seed catalog, metric/turn/keyword primitives |
 | Text domain | `scoring.rs` | Model-score parsing, word/question/correction detection, fallback keywords, rule heuristics |
 | Hook workflow | `hooks.rs` | Event routing, turn lifecycle, Git metadata, state recovery, transcript accounting, scoring, persistence, localized summary output |
@@ -38,6 +38,7 @@ The crate is a single binary with modules declared by the composition root in
 | Analytics | `analytics.rs` | Filtering, SQL projections, aggregate analysis, typed report assembly, recommendation ingestion, numeric tip windows/gating, estimates, localized console output |
 | Learning | `learning.rs` | Calibration queries, transcript rediscovery/reconstruction, feature extraction, ridge regression/CV, model persistence, heuristic replacement |
 | Historical import | `import.rs` | Transcript discovery and Claude/Codex parsing, turn reconstruction, metadata discovery, scoring, transactional persistence, safe dump and score import |
+| Host integration | `integrations.rs` | Safe, idempotent Claude Code settings merge, backup, and lifecycle hook configuration |
 | Export | `export.rs` | Typed report model, five renderers, preferred/legacy destination policy, file naming and no-overwrite writes |
 | Localization | `i18n.rs` | Language selection, embedded catalog validation, key lookup and interpolation |
 
@@ -82,6 +83,10 @@ typed records. All major workflows accept a concrete `rusqlite::Connection`.
 State outside SQLite is session-scoped JSON and language files under
 `$NEBULA_HOME/state`, managed directly by [`App`](../src/app.rs#L7). Historical
 transcripts remain external and are read on demand.
+
+The destructive `data clear` path is dispatched before database initialization.
+It removes only named Nebula-managed entries under `NEBULA_HOME`, preserving
+the directory itself, unrelated files, and external transcript sources.
 
 ### Existing testing seams
 

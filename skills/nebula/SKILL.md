@@ -167,10 +167,13 @@ connectors unless explicitly asked.
   cross-validation, adopts only models that clear the threshold and beat the
   existing rule, recomputes heuristic values, and resets calibration. Run after
   roughly 50 new turns.
-- `nebula import [--sessions N] [--exclude ID ...] [--dump FILE] [--lang L]`
-  discovers recent Claude and Codex transcripts and reconstructs numeric
-  metrics. Existing sessions are skipped. `NEBULA_TRANSCRIPTS` replaces
-  default discovery roots with an OS path list. Dumps use
+- `nebula import [--sessions N] [--exclude ID ...] [--host HOST] [--dump FILE] [--lang L]`
+  discovers transcripts only for the invoking Codex or active Claude profile
+  and reconstructs numeric metrics. Ambiguous or unknown hosts fail closed.
+  Always pass `--host codex` in Codex or `--host claude` in Claude, including
+  alternate `CLAUDE_CONFIG_DIR` profiles.
+  Existing sessions are skipped. `NEBULA_TRANSCRIPTS` explicitly replaces
+  automatic discovery with an OS path list. Dumps use
   `nebula.safe-import-dump.v1` and contain safe metadata only.
 - `nebula import-scores FILE [--lang L]` loads reviewed scores and metadata for
   imported turn IDs. Unknown turn IDs are skipped.
@@ -190,3 +193,11 @@ Schema includes `sessions`, `turns`, `keywords`, `turn_keywords`,
 `metric_definitions`, `metric_values`, learned heuristic weights, and
 calibration. Reporting views include `v_turn_summary`, `v_nebulosity`,
 `v_keyword_stats`, and `v_bias`.
+
+## Clearing local data
+
+`nebula data clear --yes [--lang L]` permanently deletes Nebula's database,
+SQLite sidecars, transient session state, and generated reports under
+`NEBULA_HOME`. It does not delete host transcripts, exports outside those
+managed paths, the executable, or installed skills. Never run it unless the
+user explicitly requests deletion and confirms the target data directory.

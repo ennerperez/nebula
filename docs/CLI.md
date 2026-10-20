@@ -63,10 +63,13 @@ By default the installer:
 4. verifies the checksum and rejects unsafe archive paths before extraction;
 5. installs the CLI to `~/.local/bin` and verifies `nebula --version`;
 6. detects installed AI agents and copies the bundled Nebula skill to each
-   detected user-level skills directory.
+   detected user-level skills directory;
+7. configures `UserPromptSubmit`, `Stop`, and `Notification` hooks when Claude
+   Code is selected or detected.
 
-The script never executes code downloaded from a release archive. If
-`~/.local/bin` is not on `PATH`, it prints a reminder after installation.
+The script verifies checksums before extraction, then runs the installed Nebula
+binary to verify its version and configure Claude hooks. If `~/.local/bin` is
+not on `PATH`, it prints a reminder after installation.
 
 Installer options:
 
@@ -79,6 +82,7 @@ Installer options:
 --skill-dir <path>     Additional skills root; may be repeated
 --no-cli               Install only the skill
 --no-skill             Install only the CLI
+--no-hooks             Do not configure Claude Code lifecycle hooks
 -h, --help             Print installer help
 ```
 
@@ -99,6 +103,10 @@ sh install.sh --no-cli --agent all
 
 # Install the skill for an Agent Skills-compatible custom agent.
 sh install.sh --no-cli --skill-dir "$HOME/my-agent/skills"
+
+# Install Claude integration in a custom config and binary location.
+CLAUDE_CONFIG_DIR="$HOME/.claude2" \
+  sh install.sh --agent claude --bin-dir "$HOME/bin"
 ```
 
 ### Agent detection and skill locations
@@ -118,8 +126,17 @@ When no supported agent is detected, installer uses generic location.
 `--agent all` targets every known agent location. `--agent none` disables skill
 installation unless explicit `--skill-dir` targets were also supplied.
 
-Skill installation alone does not add host hook configuration. AI agent or host
-integration must invoke `nebula hook` at prompt, stop, and notification events
+For Claude Code, the installer merges hooks into
+`${CLAUDE_CONFIG_DIR:-~/.claude}/settings.json`, preserves unrelated settings
+and hooks, and creates `settings.json.bak-nebula` before its first change. Hook
+commands use the absolute installed binary path, so custom `--bin-dir` values do
+not depend on Claude's `PATH`. Repeated installs are idempotent. Use
+`--no-hooks` to opt out. A skill-only install reuses `nebula` from `PATH`; if no
+binary is available, it leaves hooks unchanged and prints a notice.
+Restart Claude Code after the installer changes hook configuration; recording
+starts with the next submitted prompt.
+
+Other hosts must invoke `nebula hook` at prompt, stop, and notification events
 where supported.
 
 ### Install from a release archive
@@ -156,8 +173,7 @@ replace CLI and skill with latest or selected release.
 
 To uninstall, remove `nebula` executable from selected binary directory and
 remove `nebula` from each skills directory where installed. Metrics remain
-intact. Remove data directory separately only when its history is no longer
-needed.
+intact unless you run `nebula data clear --yes` first.
 
 ## Storage and configuration
 
@@ -172,6 +188,18 @@ Nebula stores its database and transient per-session state under:
 
 `reports/` is created on demand for preferred HTML and PDF output. Other
 preferred formats use stdout unless `--output` is given.
+
+Permanently remove all paths managed inside this directory:
+
+```sh
+nebula data clear --yes
+```
+
+This deletes `metrics.db` and its SQLite sidecars, `state/`, and `reports/`.
+It leaves the data directory itself and unrelated files intact. It never removes
+Claude/Codex transcripts, exports written outside those managed paths, the
+Nebula executable, or installed skills. The command refuses to run without
+`--yes` and rejects a `NEBULA_HOME` resolving to a filesystem root.
 
 Set `NEBULA_HOME` to use another location:
 
@@ -238,6 +266,32 @@ clamped to range 0 through 100.
 
 Run `nebula help <COMMAND>` for generated help. Global options are
 `-h, --help` and `-V, --version`.
+
+### `nebula configure claude`
+
+Merges Nebula's three lifecycle hooks into an existing Claude Code settings
+file without removing unrelated settings or hook commands:
+
+```sh
+nebula configure claude \
+  --settings "$CLAUDE_CONFIG_DIR/settings.json" \
+  --binary "$HOME/bin/nebula"
+```
+
+The command accepts a missing settings file, rejects malformed JSON without
+changing it, creates a one-time `.bak-nebula` backup, replaces legacy bare
+`nebula hook ...` entries, removes duplicate Nebula entries, and is idempotent.
+
+### `nebula data clear`
+
+```text
+nebula data clear --yes [--lang <en|es>]
+```
+
+Permanently deletes all Nebula-managed database, transient state, and generated
+report paths under `NEBULA_HOME`. This command dispatches before database
+initialization, so clearing an empty location does not recreate `metrics.db`.
+The `--yes` flag is mandatory to prevent accidental deletion.
 
 ### `nebula hook <EVENT>`
 
@@ -426,19 +480,23 @@ The minimum sample count must be at least one.
 ### `nebula import`
 
 ```text
-nebula import [--sessions <COUNT>] [--exclude <ID> ...]
+nebula import [--sessions <COUNT>] [--exclude <ID> ...] [--host <claude|codex>]
                [--dump <PATH>] [--lang <en|es>]
 ```
 
 Discovers recent Claude-compatible project transcripts and Codex session
-transcripts recursively under `${CLAUDE_CONFIG_DIR:-~/.claude}/projects` and
-`${CODEX_HOME:-~/.codex}/sessions`, skips excluded or already imported
-sessions, and reconstructs sessions, turns, context, usage, timing, heuristic
-clarity values, corrections, and fallback keywords. Set
-`NEBULA_TRANSCRIPTS` to an operating-system path list to replace both discovery
-roots. Default limit is 10 sessions. Claude subagent activity is folded into its
-parent session; subagent transcript files are not imported as separate sessions.
-The session limit must be at least one.
+transcripts recursively. Inside Codex, discovery is limited to
+`${CODEX_HOME:-~/.codex}/sessions`. Inside Claude Code, it is limited to the
+active `${CLAUDE_CONFIG_DIR:-~/.claude}/projects`; alternate profiles do not
+read standard Claude or Codex history. Agent integrations should always pass
+`--host claude` or `--host codex`; explicit identity also works when subprocess
+environment markers are unavailable. Ambiguous or unknown hosts fail closed
+instead of combining roots. Set `NEBULA_TRANSCRIPTS` to an operating-system path
+list to explicitly select transcripts when host detection is unavailable.
+Excluded or already imported sessions are skipped. Default limit is 10 sessions.
+Claude subagent activity is folded into its parent session; subagent transcript
+files are not imported as separate sessions. The session limit must be at least
+one.
 
 Text is processed only in memory. When requested, `--dump` writes schema
 `nebula.safe-import-dump.v1` with safe turn/session identifiers, timestamps,
