@@ -66,16 +66,16 @@ fn configure_hooks(
         .parent()
         .filter(|parent| !parent.as_os_str().is_empty())
         .unwrap_or_else(|| Path::new("."));
-    let quoted_agent_home = shell_quote(
-        agent_home
-            .to_str()
-            .with_context(|| format!("{host} settings directory must be valid UTF-8"))?,
-    );
-    let quoted_binary = shell_quote(binary);
+    let agent_home = agent_home
+        .to_str()
+        .with_context(|| format!("{host} settings directory must be valid UTF-8"))?;
+    let quoted_agent_home = command_quote(agent_home);
+    let quoted_binary = hook_binary_command(binary, host);
     let mut changed = false;
     for (event, nebula_event) in events {
-        let command =
-            format!("NEBULA_AGENT_HOME={quoted_agent_home} {quoted_binary} hook {nebula_event}");
+        let command = format!(
+            "{quoted_binary} --agent-home {quoted_agent_home} hook {nebula_event}"
+        );
         changed |= merge_hook(hooks, event, nebula_event, &command, host)?;
     }
     if !changed {
@@ -172,7 +172,13 @@ fn is_nebula_hook(command: &str, event: &str) -> bool {
     let trimmed = command.trim();
     trimmed.ends_with(&format!("hook {event}"))
         && trimmed.rsplit_once(" hook ").is_some_and(|(program, _)| {
-            let program = program.split_whitespace().next_back().unwrap_or(program);
+            let program = program
+                .split(" --agent-home ")
+                .next()
+                .unwrap_or(program)
+                .split_whitespace()
+                .next_back()
+                .unwrap_or(program);
             matches!(
                 program
                     .rsplit(['/', '\\'])
@@ -183,8 +189,25 @@ fn is_nebula_hook(command: &str, event: &str) -> bool {
         })
 }
 
-fn shell_quote(value: &str) -> String {
-    format!("'{}'", value.replace('\'', "'\\''"))
+fn command_quote(value: &str) -> String {
+    if cfg!(windows) {
+        format!("\"{}\"", value.replace('\\', "/"))
+    } else {
+        format!("'{}'", value.replace('\'', "'\\''"))
+    }
+}
+
+fn hook_binary_command(binary: &str, host: &str) -> String {
+    if host == "Codex"
+        && cfg!(windows)
+        && binary
+            .chars()
+            .all(|character| character.is_ascii_alphanumeric() || ":/\\._-".contains(character))
+    {
+        binary.replace('\\', "/")
+    } else {
+        command_quote(binary)
+    }
 }
 
 fn backup_path(settings: &Path) -> PathBuf {
@@ -293,8 +316,9 @@ mod tests {
         assert_eq!(value["hooks"]["Stop"].as_array().unwrap().len(), 2);
         for (event, nebula_event) in CLAUDE_EVENTS {
             let expected = format!(
-                "NEBULA_AGENT_HOME='{}' '/opt/Nebula Tools/nebula' hook {}",
-                root.display(),
+                "{} --agent-home {} hook {}",
+                command_quote("/opt/Nebula Tools/nebula"),
+                command_quote(&root.to_string_lossy()),
                 nebula_event
             );
             assert!(
@@ -331,7 +355,11 @@ mod tests {
         configure_claude(&settings, Path::new("/custom/bin/nebula")).unwrap();
         let text = fs::read_to_string(&settings).unwrap();
         assert_eq!(text.matches("hook stop").count(), 1);
-        assert!(text.contains("'/custom/bin/nebula' hook stop"));
+        assert!(text.contains(&format!(
+            "{} --agent-home {} hook stop",
+            command_quote("/custom/bin/nebula"),
+            command_quote(&root.to_string_lossy())
+        )));
 
         let invalid = root.join("invalid.json");
         fs::write(&invalid, "not-json").unwrap();
@@ -343,8 +371,12 @@ mod tests {
     #[test]
     fn quotes_custom_paths_and_recognizes_windows_commands() {
         assert_eq!(
-            shell_quote("/tmp/O'Brien/nebula"),
-            "'/tmp/O'\\''Brien/nebula'"
+            command_quote("/tmp/O'Brien/nebula"),
+            if cfg!(windows) {
+                "\"/tmp/O'Brien/nebula\""
+            } else {
+                "'/tmp/O'\\''Brien/nebula'"
+            }
         );
         assert!(is_nebula_hook(
             r#""C:\Nebula Tools\nebula.exe" hook stop"#,
@@ -354,6 +386,24 @@ mod tests {
             "python3 '/home/demo/.claude-alt/skills/nebular/nebular.py' hook stop",
             "stop"
         ));
+        assert!(is_nebula_hook(
+            r#""C:/Nebula Tools/nebula.exe" --agent-home "C:/Users/demo/.claude" hook stop"#,
+            "stop"
+        ));
+        if cfg!(windows) {
+            assert_eq!(
+                command_quote(r"C:\Users\demo\Nebula Tools\nebula.exe"),
+                "\"C:/Users/demo/Nebula Tools/nebula.exe\""
+            );
+            assert_eq!(
+                hook_binary_command(r"C:\Users\demo\.local\bin\nebula.exe", "Codex"),
+                "C:/Users/demo/.local/bin/nebula.exe"
+            );
+            assert_eq!(
+                hook_binary_command(r"C:\Nebula Tools\nebula.exe", "Codex"),
+                "\"C:/Nebula Tools/nebula.exe\""
+            );
+        }
     }
 
     #[test]
@@ -375,8 +425,9 @@ mod tests {
         assert_eq!(value["hooks"]["Stop"].as_array().unwrap().len(), 2);
         for (event, nebula_event) in CODEX_EVENTS {
             let expected = format!(
-                "NEBULA_AGENT_HOME='{}' '/opt/nebula' hook {nebula_event}",
-                root.display()
+                "{} --agent-home {} hook {nebula_event}",
+                hook_binary_command("/opt/nebula", "Codex"),
+                command_quote(&root.to_string_lossy())
             );
             assert!(
                 value["hooks"][event]

@@ -7,10 +7,11 @@ DEFAULT_REPO=ennerperez/nebula
 REPO=${NEBULA_REPO:-$DEFAULT_REPO}
 VERSION=${NEBULA_VERSION:-latest}
 BIN_DIR=${NEBULA_INSTALL_DIR:-${HOME:-}/.local/bin}
-AGENT_MODE=${NEBULA_AGENT:-auto}
+AGENT_MODE=${NEBULA_AGENT:-none}
 INSTALL_CLI=1
 INSTALL_SKILL=1
 INSTALL_HOOKS=1
+REPAIR_HOOKS=0
 CLAUDE_SELECTED=0
 CODEX_SELECTED=0
 SKILL_ROOTS=
@@ -29,12 +30,14 @@ Options:
   --repo <owner/repo>    GitHub repository. Default: ennerperez/nebula
   --bin-dir <path>       CLI destination. Default: $NEBULA_INSTALL_DIR or ~/.local/bin
   --agent <agent>        Skill target: auto, all, codex, claude, gemini,
-                         opencode, generic, or none. May be repeated.
+                         opencode, generic, or none. Default: none.
+                         May be repeated.
   --skill-dir <path>     Additional skills root; installs <path>/nebula.
                          May be repeated.
   --no-cli               Do not install the CLI.
   --no-skill             Do not install the Agent Skill.
   --no-hooks             Do not configure Codex or Claude Code lifecycle hooks.
+  --repair-hooks         Repair selected agent hooks using the installed CLI; no download.
   -h, --help             Show this help.
 
 Environment overrides:
@@ -143,6 +146,10 @@ while [ "$#" -gt 0 ]; do
             INSTALL_HOOKS=0
             shift
             ;;
+        --repair-hooks)
+            REPAIR_HOOKS=1
+            shift
+            ;;
         -h|--help)
             usage
             exit 0
@@ -159,7 +166,9 @@ if [ "$AGENT_MODE" = none ] && [ -z "$SKILL_ROOTS" ]; then
     INSTALL_SKILL=0
 fi
 
-[ "$INSTALL_CLI" -eq 1 ] || [ "$INSTALL_SKILL" -eq 1 ] || die 'nothing to install'
+if [ "$REPAIR_HOOKS" -eq 0 ]; then
+    [ "$INSTALL_CLI" -eq 1 ] || [ "$INSTALL_SKILL" -eq 1 ] || die 'nothing to install'
+fi
 [ -n "${HOME:-}" ] || die 'HOME is not set'
 [ -n "$BIN_DIR" ] || die 'binary directory cannot be empty'
 
@@ -190,6 +199,10 @@ case "$OS" in
     *) die "unsupported operating system: ${OS:-unknown}" ;;
 esac
 
+if [ "$OS" = windows ] && [ "$HOME" = / ]; then
+    die 'HOME resolves to / on Windows; use install.ps1 in PowerShell or set a valid HOME'
+fi
+
 ARCH=$(uname -m 2>/dev/null || true)
 case "$ARCH" in
     x86_64|amd64) ARCH=x86_64 ;;
@@ -203,6 +216,58 @@ if [ "$OS" = windows ]; then
 else
     ARCHIVE="$PROGRAM-$OS-$ARCH.tar.gz"
     BINARY=$PROGRAM
+fi
+
+configure_selected_hooks() {
+    hook_binary=$1
+    if [ "$CODEX_SELECTED" -eq 1 ]; then
+        codex_hooks="${CODEX_HOME:-$HOME/.codex}/hooks.json"
+        if "$hook_binary" configure codex --help >/dev/null 2>&1; then
+            "$hook_binary" configure codex \
+                --hooks "$codex_hooks" \
+                --binary "$hook_binary"
+        elif [ "$REPAIR_HOOKS" -eq 1 ]; then
+            die 'installed Nebula CLI does not support Codex hook configuration'
+        else
+            note 'Codex hooks were not configured because this Nebula version does not support automatic setup.'
+        fi
+    fi
+    if [ "$CLAUDE_SELECTED" -eq 1 ]; then
+        claude_settings="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/settings.json"
+        if "$hook_binary" configure claude --help >/dev/null 2>&1; then
+            "$hook_binary" configure claude \
+                --settings "$claude_settings" \
+                --binary "$hook_binary"
+        elif [ "$REPAIR_HOOKS" -eq 1 ]; then
+            die 'installed Nebula CLI does not support Claude Code hook configuration'
+        else
+            note 'Claude hooks were not configured because this Nebula version does not support automatic setup.'
+        fi
+    fi
+}
+
+if [ "$REPAIR_HOOKS" -eq 1 ]; then
+    [ "$INSTALL_HOOKS" -eq 1 ] || die '--repair-hooks cannot be combined with --no-hooks'
+    if [ "$AGENT_MODE" = auto ]; then
+        if command -v codex >/dev/null 2>&1 || [ -d "${CODEX_HOME:-$HOME/.codex}" ]; then
+            add_agent codex
+        fi
+        if command -v claude >/dev/null 2>&1 || [ -d "${CLAUDE_CONFIG_DIR:-$HOME/.claude}" ]; then
+            add_agent claude
+        fi
+    fi
+    [ "$CODEX_SELECTED" -eq 1 ] || [ "$CLAUDE_SELECTED" -eq 1 ] || \
+        die '--repair-hooks requires --agent codex or --agent claude'
+    if [ -x "$BIN_DIR/$BINARY" ]; then
+        hook_binary=$(cd "$BIN_DIR" && pwd -P)/$BINARY
+    elif command -v "$PROGRAM" >/dev/null 2>&1; then
+        discovered_binary=$(command -v "$PROGRAM")
+        hook_binary="$(cd "$(dirname "$discovered_binary")" && pwd -P)/$(basename "$discovered_binary")"
+    else
+        die 'installed Nebula CLI not found'
+    fi
+    configure_selected_hooks "$hook_binary"
+    exit 0
 fi
 
 if command -v curl >/dev/null 2>&1; then
@@ -367,25 +432,8 @@ if [ "$INSTALL_SKILL" -eq 1 ] && [ "$INSTALL_HOOKS" -eq 1 ] && \
         discovered_binary=$(command -v "$PROGRAM")
         hook_binary="$(cd "$(dirname "$discovered_binary")" && pwd -P)/$(basename "$discovered_binary")"
     fi
-    if [ -n "$hook_binary" ] && [ "$CODEX_SELECTED" -eq 1 ]; then
-        codex_hooks="${CODEX_HOME:-$HOME/.codex}/hooks.json"
-        if "$hook_binary" configure codex --help >/dev/null 2>&1; then
-            "$hook_binary" configure codex \
-                --hooks "$codex_hooks" \
-                --binary "$hook_binary"
-        else
-            note "Codex hooks were not configured because this Nebula version does not support automatic setup."
-        fi
-    fi
-    if [ -n "$hook_binary" ] && [ "$CLAUDE_SELECTED" -eq 1 ]; then
-        claude_settings="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/settings.json"
-        if "$hook_binary" configure claude --help >/dev/null 2>&1; then
-            "$hook_binary" configure claude \
-                --settings "$claude_settings" \
-                --binary "$hook_binary"
-        else
-            note "Claude hooks were not configured because this Nebula version does not support automatic setup."
-        fi
+    if [ -n "$hook_binary" ]; then
+        configure_selected_hooks "$hook_binary"
     fi
     if [ -z "$hook_binary" ]; then
         note "Lifecycle hooks were not configured because '$PROGRAM' is not installed or on PATH."
