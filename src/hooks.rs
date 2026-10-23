@@ -757,8 +757,8 @@ mod tests {
                 &spanish(),
             )
             .unwrap(),
-            "⏱ est 45s / real 38s (0.84x) · pet.: 3 · palabras: 8u / 96a · agentes: 0\n\
-🌫 u2a 3.4 / (12 heur.) · a2u 1 / (8 heur.) · aclaraciones: 0 · correcciones: 0 · consejo: Indica archivo y resultado esperado."
+            "⏱  est 45s / real 38s (0.84x) · pet.: 3 · palabras: 8u / 96a · agentes: 0\n\
+>> u2a 3.4 / (12 heur.) · a2u 1 / (8 heur.) · aclaraciones: 0 · correcciones: 0 · consejo: Indica archivo y resultado esperado."
         );
         fs::remove_dir_all(root).unwrap();
     }

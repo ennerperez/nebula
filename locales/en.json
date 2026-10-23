@@ -29,8 +29,8 @@
   "learning": {"calibrate_header":"metric                 dir  n    corr   slope  intercept  mean bias","calibrate_skip":"skip (< {samples})","fit_texts":"reconstructed {count} in-memory message samples","fit_header":"metric                 dir  n    rule r  CV r          lambda  adopted","fit_done":"adopted {count} learned models; heuristic values recomputed; calibration reset","yes":"yes","no":"no"},
   "import": {"skip_imported":"skip already imported session {session}","skip_unknown":"skip unknown turn {turn}","total":"imported {turns} turns from {sessions} sessions · skipped {skipped}","dump_saved":"safe dump saved: {turns} turns to {path}","scored":"scored {scored} turns · skipped {skipped}","read_error":"cannot read score file {path}","invalid_file":"invalid score file JSON: {error}","invalid_turn":"score row {row} has no integer turn_id","invalid_keywords":"score row {row} keywords must be an array of strings","invalid_task_type":"score row {row} task_type must be text","invalid_clarifying":"score row {row} clarifying_questions must be a non-negative number","ambiguous_host":"cannot determine one transcript host; pass --host claude|codex or set NEBULA_TRANSCRIPTS"},
   "summary": {
-    "line1": "⏱ est {est} / real {real}{ratio} · req.: {req} · words: {win}u / {wout}a · agents: {agents}",
-    "line2": "🌫 u2a {u2a} / ({u2a_h} heur.) · a2u {a2u} / ({a2u_h} heur.) · clarifications: {clar} · corrections: {corr}{tip}",
+    "line1": "⏱  est {est} / real {real}{ratio} · req.: {req} · words: {win}u / {wout}a · agents: {agents}",
+    "line2": ">> u2a {u2a} / ({u2a_h} heur.) · a2u {a2u} / ({a2u_h} heur.) · clarifications: {clar} · corrections: {corr}{tip}",
     "tip": " · tip: {tip}"
   },
   "hook": {"context":"[nebula] turn {seq} open. Follow the nebula skill: log-start now, log-end before finishing.","error":"nebula hook error: {error}","invalid_json":"hook payload is not valid JSON: {error}","invalid_shape":"hook payload must be a JSON object","summary":"Nebula · est {estimate} / real {real}s · words {words_in}/{words_out}"}
