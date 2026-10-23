@@ -3,3 +3,4 @@
 /docs/plan-*-*.md
 
 tmp/
+.recall/
