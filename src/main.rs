@@ -25,6 +25,20 @@ use std::io::{self, Read};
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
+    if matches!(&cli.cmd, Cmd::Hook { .. }) {
+        return finish_hook(run(cli));
+    }
+    run(cli)
+}
+
+fn finish_hook(result: Result<()>) -> Result<()> {
+    if let Err(error) = result {
+        eprintln!("nebula hook error: {error:#}");
+    }
+    Ok(())
+}
+
+fn run(cli: Cli) -> Result<()> {
     if let Cmd::Configure { cmd } = &cli.cmd {
         match cmd {
             ConfigureCmd::Codex { hooks, binary } => {
@@ -282,12 +296,17 @@ fn environment_language() -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::parse_hook_payload;
+    use super::{finish_hook, parse_hook_payload};
 
     #[test]
     fn hook_payload_rejects_invalid_json_and_non_objects() {
         assert!(parse_hook_payload("not-json").is_err());
         assert!(parse_hook_payload("[]").is_err());
         assert!(parse_hook_payload(r#"{"session_id":"s"}"#).is_ok());
+    }
+
+    #[test]
+    fn hook_initialization_error_is_nonfatal() {
+        assert!(finish_hook(Err(anyhow::anyhow!("database unavailable"))).is_ok());
     }
 }
