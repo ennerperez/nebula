@@ -39,7 +39,9 @@
   so custom install directories work without `PATH`. Windows hook commands use
   forward slash paths. Codex hook executables use an unquoted token when the
   absolute path contains only shell-safe characters. Codex hook trust remains
-  host-controlled.
+  host-controlled. Codex setup also merges `<CODEX_HOME>/nebula` into
+  `sandbox_workspace_write.writable_roots` in `config.toml`, preserving existing
+  TOML content and creating a one-time backup.
 - Tips are agent-authored transient text, limited to 90 characters and gated by
   current-versus-recent same-session `u2a`; no automatic tip catalog is shipped.
 - English and Spanish catalogs are compiled into the binary with `include_str!`;

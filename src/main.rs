@@ -29,15 +29,27 @@ fn main() -> Result<()> {
         match cmd {
             ConfigureCmd::Codex { hooks, binary } => {
                 let result = integrations::configure_codex(hooks, binary)?;
-                if result.changed {
+                if result.hooks.changed {
                     println!("Configured Codex hooks: {}", hooks.display());
-                    if let Some(backup) = result.backup {
+                    if let Some(backup) = result.hooks.backup {
                         println!("Backup: {}", backup.display());
                     }
-                    println!("Restart Codex, then review and trust the Nebula hooks with /hooks.");
                 } else {
                     println!("Codex hooks already configured: {}", hooks.display());
                 }
+                let config = hooks.with_file_name("config.toml");
+                if result.sandbox.changed {
+                    println!("Configured Codex writable root: {}", config.display());
+                    if let Some(backup) = result.sandbox.backup {
+                        println!("Backup: {}", backup.display());
+                    }
+                } else {
+                    println!(
+                        "Codex writable root already configured: {}",
+                        config.display()
+                    );
+                }
+                println!("Restart Codex, then review and trust the Nebula hooks with /hooks.");
             }
             ConfigureCmd::Claude { settings, binary } => {
                 let result = integrations::configure_claude(settings, binary)?;

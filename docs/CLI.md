@@ -83,7 +83,9 @@ Both installers:
 5. install the CLI to `~/.local/bin` and verify `nebula --version`;
 6. copy the bundled Nebula skill to selected agent roots only;
 7. configure `UserPromptSubmit`, `Stop`, and permission-wait hooks when Codex
-   or Claude Code is selected.
+   or Claude Code is selected;
+8. add `<CODEX_HOME>/nebula` to Codex
+   `sandbox_workspace_write.writable_roots` when Codex is selected.
 
 Both scripts verify checksums before extraction, then run the installed Nebula
 binary to verify its version and configure supported host hooks. If `~/.local/bin` is

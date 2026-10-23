@@ -6,6 +6,7 @@ use std::{
     path::{Path, PathBuf},
     sync::atomic::{AtomicU64, Ordering},
 };
+use toml_edit::{Array, DocumentMut, Item, Table, value};
 
 const CLAUDE_EVENTS: [(&str, &str); 3] = [
     ("UserPromptSubmit", "user-prompt-submit"),
@@ -24,12 +25,117 @@ pub(crate) struct ConfigureResult {
     pub(crate) backup: Option<PathBuf>,
 }
 
+pub(crate) struct CodexConfigureResult {
+    pub(crate) hooks: ConfigureResult,
+    pub(crate) sandbox: ConfigureResult,
+}
+
 pub(crate) fn configure_claude(settings: &Path, binary: &Path) -> Result<ConfigureResult> {
     configure_hooks(settings, binary, "Claude", &CLAUDE_EVENTS)
 }
 
-pub(crate) fn configure_codex(hooks: &Path, binary: &Path) -> Result<ConfigureResult> {
-    configure_hooks(hooks, binary, "Codex", &CODEX_EVENTS)
+pub(crate) fn configure_codex(hooks: &Path, binary: &Path) -> Result<CodexConfigureResult> {
+    let codex_home = hooks
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+        .unwrap_or_else(|| Path::new("."));
+    let sandbox =
+        configure_codex_writable_root(&codex_home.join("config.toml"), &codex_home.join("nebula"))?;
+    let hooks = configure_hooks(hooks, binary, "Codex", &CODEX_EVENTS)?;
+    Ok(CodexConfigureResult { hooks, sandbox })
+}
+
+fn configure_codex_writable_root(config: &Path, writable_root: &Path) -> Result<ConfigureResult> {
+    let original = match fs::read(config) {
+        Ok(contents) => Some(contents),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
+        Err(error) => {
+            return Err(error).with_context(|| format!("cannot read {}", config.display()));
+        }
+    };
+    let mut document = match original.as_deref() {
+        Some(contents) => std::str::from_utf8(contents)
+            .with_context(|| format!("{} must contain valid UTF-8", config.display()))?
+            .parse::<DocumentMut>()
+            .with_context(|| format!("{} contains invalid TOML", config.display()))?,
+        None => DocumentMut::new(),
+    };
+    let section = document
+        .entry("sandbox_workspace_write")
+        .or_insert_with(|| Item::Table(Table::new()))
+        .as_table_like_mut()
+        .with_context(|| {
+            format!(
+                "{} setting 'sandbox_workspace_write' must be a table",
+                config.display()
+            )
+        })?;
+    if !section.contains_key("writable_roots") {
+        section.insert("writable_roots", value(Array::new()));
+    }
+    let writable_roots = section
+        .get_mut("writable_roots")
+        .and_then(Item::as_array_mut)
+        .with_context(|| {
+            format!(
+                "{} setting 'sandbox_workspace_write.writable_roots' must be an array",
+                config.display()
+            )
+        })?;
+    let writable_root = writable_root
+        .to_str()
+        .context("Codex Nebula writable root must be valid UTF-8")?;
+    if writable_roots
+        .iter()
+        .filter_map(|entry| entry.as_str())
+        .any(|entry| paths_equal(entry, writable_root))
+    {
+        fs::create_dir_all(writable_root)
+            .with_context(|| format!("cannot create {writable_root}"))?;
+        return Ok(ConfigureResult {
+            changed: false,
+            backup: None,
+        });
+    }
+    writable_roots.push(writable_root);
+
+    let parent = config
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+        .unwrap_or_else(|| Path::new("."));
+    fs::create_dir_all(parent).with_context(|| format!("cannot create {}", parent.display()))?;
+    fs::create_dir_all(writable_root).with_context(|| format!("cannot create {writable_root}"))?;
+    let backup = if let Some(contents) = original.as_ref() {
+        let path = backup_path(config);
+        if path.exists() {
+            None
+        } else {
+            write_backup(&path, contents, fs::metadata(config)?.permissions())?;
+            Some(path)
+        }
+    } else {
+        None
+    };
+
+    let mut output = document.to_string().into_bytes();
+    if !output.ends_with(b"\n") {
+        output.push(b'\n');
+    }
+    atomic_write(config, &output, original.is_some())?;
+    Ok(ConfigureResult {
+        changed: true,
+        backup,
+    })
+}
+
+fn paths_equal(left: &str, right: &str) -> bool {
+    if cfg!(windows) {
+        left.replace('\\', "/")
+            .trim_end_matches('/')
+            .eq_ignore_ascii_case(right.replace('\\', "/").trim_end_matches('/'))
+    } else {
+        left.trim_end_matches('/') == right.trim_end_matches('/')
+    }
 }
 
 fn configure_hooks(
@@ -73,9 +179,8 @@ fn configure_hooks(
     let quoted_binary = hook_binary_command(binary, host);
     let mut changed = false;
     for (event, nebula_event) in events {
-        let command = format!(
-            "{quoted_binary} --agent-home {quoted_agent_home} hook {nebula_event}"
-        );
+        let command =
+            format!("{quoted_binary} --agent-home {quoted_agent_home} hook {nebula_event}");
         changed |= merge_hook(hooks, event, nebula_event, &command, host)?;
     }
     if !changed {
@@ -411,15 +516,30 @@ mod tests {
         let root = test_dir();
         fs::create_dir_all(&root).unwrap();
         let hooks = root.join("hooks.json");
+        let config = root.join("config.toml");
         fs::write(
             &hooks,
             r#"{"description":"keep","hooks":{"Stop":[{"hooks":[{"type":"command","command":"notify-send done"}]}]}}"#,
         )
         .unwrap();
+        let original_config = "# keep this comment\nmodel = \"gpt-test\"\n\n[sandbox_workspace_write]\nwritable_roots = [\"/existing/root\"]\n";
+        fs::write(&config, original_config).unwrap();
 
         let result = configure_codex(&hooks, Path::new("/opt/nebula")).unwrap();
-        assert!(result.changed);
-        assert_eq!(result.backup, Some(root.join("hooks.json.bak-nebula")));
+        assert!(result.hooks.changed);
+        assert!(result.sandbox.changed);
+        assert_eq!(
+            result.hooks.backup,
+            Some(root.join("hooks.json.bak-nebula"))
+        );
+        assert_eq!(
+            result.sandbox.backup,
+            Some(root.join("config.toml.bak-nebula"))
+        );
+        assert_eq!(
+            fs::read_to_string(root.join("config.toml.bak-nebula")).unwrap(),
+            original_config
+        );
         let value: Value = serde_json::from_slice(&fs::read(&hooks).unwrap()).unwrap();
         assert_eq!(value["description"], "keep");
         assert_eq!(value["hooks"]["Stop"].as_array().unwrap().len(), 2);
@@ -441,10 +561,75 @@ mod tests {
                         .any(|hook| hook["command"].as_str() == Some(expected.as_str())))
             );
         }
+        let config_text = fs::read_to_string(&config).unwrap();
+        assert!(config_text.contains("# keep this comment"));
+        let document = config_text.parse::<DocumentMut>().unwrap();
+        let writable_roots = document["sandbox_workspace_write"]["writable_roots"]
+            .as_array()
+            .unwrap();
+        assert_eq!(writable_roots.len(), 2);
+        assert_eq!(
+            writable_roots.get(0).and_then(|entry| entry.as_str()),
+            Some("/existing/root")
+        );
+        assert_eq!(
+            writable_roots.get(1).and_then(|entry| entry.as_str()),
+            root.join("nebula").to_str()
+        );
+        assert!(root.join("nebula").is_dir());
 
         let second = configure_codex(&hooks, Path::new("/opt/nebula")).unwrap();
-        assert!(!second.changed);
-        assert!(second.backup.is_none());
+        assert!(!second.hooks.changed);
+        assert!(!second.sandbox.changed);
+        assert!(second.hooks.backup.is_none());
+        assert!(second.sandbox.backup.is_none());
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn configures_codex_sandbox_for_fresh_home() {
+        let root = test_dir();
+        let hooks = root.join("hooks.json");
+
+        let result = configure_codex(&hooks, Path::new("/opt/nebula")).unwrap();
+
+        assert!(result.hooks.changed);
+        assert!(result.sandbox.changed);
+        assert!(result.hooks.backup.is_none());
+        assert!(result.sandbox.backup.is_none());
+        assert!(hooks.is_file());
+        assert!(root.join("nebula").is_dir());
+        let config_text = fs::read_to_string(root.join("config.toml")).unwrap();
+        let document = config_text.parse::<DocumentMut>().unwrap();
+        let writable_roots = document["sandbox_workspace_write"]["writable_roots"]
+            .as_array()
+            .unwrap();
+        assert_eq!(writable_roots.len(), 1);
+        assert_eq!(
+            writable_roots.get(0).and_then(|entry| entry.as_str()),
+            root.join("nebula").to_str()
+        );
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn rejects_invalid_codex_sandbox_without_writing_hooks() {
+        let root = test_dir();
+        fs::create_dir_all(&root).unwrap();
+        let hooks = root.join("hooks.json");
+        let config = root.join("config.toml");
+        fs::write(&config, "sandbox_workspace_write = []\n").unwrap();
+
+        let error = configure_codex(&hooks, Path::new("/opt/nebula"))
+            .err()
+            .unwrap();
+
+        assert!(error.to_string().contains("must be a table"));
+        assert!(!hooks.exists());
+        assert_eq!(
+            fs::read_to_string(config).unwrap(),
+            "sandbox_workspace_write = []\n"
+        );
         fs::remove_dir_all(root).unwrap();
     }
 }

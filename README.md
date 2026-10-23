@@ -55,8 +55,9 @@ irm https://raw.githubusercontent.com/ennerperez/nebula/master/install.ps1 -OutF
 
 Supported targets: Codex, Claude Code, Gemini CLI, OpenCode, and generic Agent
 Skills directory. Codex and Claude Code installation also configures Nebula
-lifecycle hooks. Restart agent after installation. In Codex, review and trust
-installed hooks with `/hooks`.
+lifecycle hooks. Codex installation also adds `$CODEX_HOME/nebula` to
+`sandbox_workspace_write.writable_roots`. Restart agent after installation. In
+Codex, review and trust installed hooks with `/hooks`.
 
 Custom skill roots:
 
