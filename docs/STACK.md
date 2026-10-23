@@ -10,6 +10,9 @@
 - Test support: Rust unit tests with isolated temporary state and in-memory SQLite databases.
 - Coverage: `cargo-llvm-cov` on nightly Rust with LLVM branch instrumentation; `scripts/check-coverage.sh` enforces at least 85% line and branch coverage over production code (test-module instrumentation is excluded).
 - CI: GitHub Actions builds every push to `develop`; pull requests build and run coverage-gated unit tests.
+- Release installers: POSIX shell for Linux/macOS and PowerShell 5.1+ for native
+  Windows. Both verify release SHA-256 checksums and install the CLI and bundled
+  Agent Skill when selected; Codex and Claude Code hooks are configured by the CLI.
 
 ## Runtime considerations
 
@@ -32,8 +35,11 @@
 - Hook failures print an error to stderr and exit successfully so metrics cannot break host sessions.
 - Codex and Claude Code integrations merge hooks into their JSON configuration
   through temporary-file replacement, preserve unrelated configuration, create
-  a one-time backup, and record an absolute Nebula binary path so custom install
-  directories work without `PATH`. Codex hook trust remains host-controlled.
+  a one-time backup, and record an absolute Nebula binary path plus `--agent-home`
+  so custom install directories work without `PATH`. Windows hook commands use
+  forward slash paths. Codex hook executables use an unquoted token when the
+  absolute path contains only shell-safe characters. Codex hook trust remains
+  host-controlled.
 - Tips are agent-authored transient text, limited to 90 characters and gated by
   current-versus-recent same-session `u2a`; no automatic tip catalog is shipped.
 - English and Spanish catalogs are compiled into the binary with `include_str!`;

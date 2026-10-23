@@ -15,7 +15,7 @@ text.
 
 ## Install
 
-Download the installer before running it:
+Download the installer before running it. On Linux and macOS:
 
 ```sh
 curl --proto '=https' --tlsv1.2 -fsSLO \
@@ -23,31 +23,53 @@ curl --proto '=https' --tlsv1.2 -fsSLO \
 sh install.sh
 ```
 
-The installer selects the matching GitHub release, verifies its SHA-256
-checksum, installs `nebula` to `~/.local/bin`, and installs the bundled skill
-for detected AI agents. It supports Codex, Claude Code, Gemini CLI, OpenCode,
-and the generic Agent Skills directory. When Codex or Claude Code is selected
-or detected, it also configures Nebula's lifecycle hooks automatically.
-Restart the agent after first installation so the hooks load. Codex also
-requires reviewing and trusting the installed hooks with `/hooks`.
+On Windows, run in PowerShell:
 
-Select targets or paths explicitly when needed:
-
-```sh
-sh install.sh --agent codex
-sh install.sh --agent claude --agent gemini
+```powershell
+irm https://raw.githubusercontent.com/ennerperez/nebula/master/install.ps1 | iex
 ```
 
-Or use custom paths:
+Both installers select matching GitHub release, verify SHA-256 checksum, and
+install `nebula` to `~/.local/bin` (Windows: `$HOME\.local\bin`). Agent
+integration requires explicit selection; no agent is changed by default. Add
+binary directory to `PATH` if prompted. Run `nebula --version` to check.
+
+## Select agent explicitly
+
+To install an agent integration, use one command per agent:
 
 ```sh
-sh install.sh --bin-dir "$HOME/.local/bin" --skill-dir "$HOME/.claude-custom/skills"
-CLAUDE_CONFIG_DIR="$HOME/.claude-custom" \
-  sh install.sh --agent claude --bin-dir "$HOME/.local/bin"
+sh install.sh --no-cli --agent codex
+sh install.sh --no-cli --agent claude
+sh install.sh --no-cli --agent gemini
 ```
 
-See [CLI guide](docs/CLI.md#installation) for supported platforms, every
-installer option, source builds, updates, and removal.
+On Windows, download script once, then install agents separately:
+
+```powershell
+irm https://raw.githubusercontent.com/ennerperez/nebula/master/install.ps1 -OutFile install.ps1
+.\install.ps1 -NoCli -Agent codex
+.\install.ps1 -NoCli -Agent claude
+.\install.ps1 -NoCli -Agent gemini
+```
+
+Supported targets: Codex, Claude Code, Gemini CLI, OpenCode, and generic Agent
+Skills directory. Codex and Claude Code installation also configures Nebula
+lifecycle hooks. Restart agent after installation. In Codex, review and trust
+installed hooks with `/hooks`.
+
+Custom skill roots:
+
+```sh
+sh install.sh --no-cli --skill-dir "$HOME/my-agent/skills"
+```
+
+```powershell
+.\install.ps1 -NoCli -SkillDir "$HOME\my-agent\skills"
+```
+
+See [CLI guide](docs/CLI.md#installation) for supported platforms, installer
+options, source builds, updates, and removal.
 
 ## Quick start
 

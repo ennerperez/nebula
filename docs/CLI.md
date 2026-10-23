@@ -25,16 +25,17 @@ import, and metric-definition management.
 
 ### Requirements
 
-The release installer requires:
+The POSIX release installer requires:
 
 - a POSIX shell;
 - `curl` or `wget`;
 - `sha256sum`, `shasum`, or `openssl` for checksum verification;
 - `tar` for Linux and macOS archives, or `unzip` for Windows archives.
 
+The native Windows installer requires Windows PowerShell 5.1 or PowerShell 7.
 Published release packages cover Linux, macOS, and Windows on `x86_64` and
-`aarch64`. On Windows, run the shell installer from an environment that provides
-`sh` and `uname`, such as Git Bash, MSYS2, or Cygwin.
+`aarch64`. The POSIX installer also runs on Windows under Git Bash, MSYS2, or
+Cygwin.
 
 Release CI validates the selected `vX.Y.Z` tag and injects `X.Y.Z` as the
 compile-time CLI version. Local builds without that release variable report the
@@ -49,9 +50,9 @@ package version from `Cargo.toml`.
 | Windows | `x86_64` | `nebula-windows-x86_64.zip` |
 | Windows | `aarch64` | `nebula-windows-aarch64.zip` |
 
-### Recommended: verified release installer
+### Verified release installer
 
-Download and inspect the script, then run it:
+On Linux and macOS, download and inspect the script, then run it:
 
 ```sh
 curl --proto '=https' --tlsv1.2 -fsSLO \
@@ -59,19 +60,32 @@ curl --proto '=https' --tlsv1.2 -fsSLO \
 sh install.sh
 ```
 
-By default the installer:
+On Windows, use native PowerShell:
 
-1. resolves the latest release for `ennerperez/nebula`;
-2. chooses an archive for the detected operating system and architecture;
-3. downloads the archive and `SHA256SUMS` into a temporary directory;
-4. verifies the checksum and rejects unsafe archive paths before extraction;
-5. installs the CLI to `~/.local/bin` and verifies `nebula --version`;
-6. detects installed AI agents and copies the bundled Nebula skill to each
-   detected user-level skills directory;
-7. configures `UserPromptSubmit`, `Stop`, and permission-wait hooks when Codex
-   or Claude Code is selected or detected.
+```powershell
+irm https://raw.githubusercontent.com/ennerperez/nebula/master/install.ps1 | iex
+```
 
-The script verifies checksums before extraction, then runs the installed Nebula
+The PowerShell one-liner installs only the CLI. To install an agent integration,
+download the script and pass its name:
+
+```powershell
+irm https://raw.githubusercontent.com/ennerperez/nebula/master/install.ps1 -OutFile install.ps1
+.\install.ps1 -NoCli -Agent codex
+```
+
+Both installers:
+
+1. resolve the latest release for `ennerperez/nebula`;
+2. choose an archive for the detected operating system and architecture;
+3. download the archive and `SHA256SUMS` into a temporary directory;
+4. verify the checksum and reject unsafe archive paths before extraction;
+5. install the CLI to `~/.local/bin` and verify `nebula --version`;
+6. copy the bundled Nebula skill to selected agent roots only;
+7. configure `UserPromptSubmit`, `Stop`, and permission-wait hooks when Codex
+   or Claude Code is selected.
+
+Both scripts verify checksums before extraction, then run the installed Nebula
 binary to verify its version and configure supported host hooks. If `~/.local/bin` is
 not on `PATH`, it prints a reminder after installation.
 
@@ -82,16 +96,22 @@ Installer options:
 --repo <owner/repo>    GitHub repository (default: ennerperez/nebula)
 --bin-dir <path>       CLI destination (default: ~/.local/bin)
 --agent <agent>        auto, all, codex, claude, gemini, opencode, generic,
-                       or none; may be repeated
+                       or none; default: none; may be repeated
 --skill-dir <path>     Additional skills root; may be repeated
 --no-cli               Install only the skill
 --no-skill             Install only the CLI
 --no-hooks             Do not configure Codex or Claude Code lifecycle hooks
+--repair-hooks         Repair selected hooks with installed CLI; no download
 -h, --help             Print installer help
 ```
 
 Equivalent environment overrides are `NEBULA_VERSION`, `NEBULA_REPO`,
 `NEBULA_INSTALL_DIR`, and `NEBULA_AGENT`.
+
+PowerShell uses `-Version`, `-Repo`, `-BinDir`, `-Agent`, `-SkillDir`, `-NoCli`,
+`-NoHooks`, and `-RepairHooks`. Pass multiple agent names as `-Agent codex,claude`. It uses the
+same environment overrides and Windows default binary directory
+`$HOME\.local\bin`.
 
 Examples:
 
@@ -115,8 +135,8 @@ CLAUDE_CONFIG_DIR="$HOME/.claude2" \
 
 ### Agent detection and skill locations
 
-In `auto` mode, Nebula detects an agent when its executable or configuration
-directory exists. It installs the skill to:
+Agent installation is opt-in. In `auto` mode, Nebula detects an agent when its
+executable or configuration directory exists. It installs the skill to:
 
 | Agent | Skill directory | Default data directory |
 | --- | --- | --- |
@@ -126,7 +146,7 @@ directory exists. It installs the skill to:
 | OpenCode | `${XDG_CONFIG_HOME:-~/.config}/opencode/skills/nebula` | `${XDG_CONFIG_HOME:-~/.config}/opencode/nebula` |
 | Generic fallback | `~/.agents/skills/nebula` | `~/.agents/nebula` |
 
-When no supported agent is detected, installer uses generic location.
+When no supported agent is detected in `auto` mode, installer uses generic location.
 `--agent all` targets every known agent location. `--agent none` disables skill
 installation unless explicit `--skill-dir` targets were also supplied.
 
@@ -144,6 +164,17 @@ not depend on Claude's `PATH`. Repeated installs are idempotent. Use
 binary is available, it leaves hooks unchanged and prints a notice.
 Restart the host after the installer changes hook configuration; recording
 starts with the next submitted prompt after any required trust review.
+
+To repair existing hooks without downloading a release, use the installed CLI:
+
+```sh
+sh install.sh --repair-hooks --agent codex --agent claude
+```
+
+On Windows, use `./install.ps1 -RepairHooks -Agent codex,claude`. Windows
+installation and repair rewrite legacy POSIX Nebula hook commands into native
+Windows commands, even when the installed CLI still emits the older format.
+Both repair modes require an installed Nebula CLI and leave unrelated hooks intact.
 
 Other hosts must invoke `nebula hook` at prompt, stop, and notification events
 where supported.
@@ -177,8 +208,8 @@ Skill.
 
 ### Update and uninstall
 
-Nebula has no built-in update or uninstall command. Re-run `install.sh` to
-replace CLI and skill with latest or selected release.
+Nebula has no built-in update or uninstall command. Re-run `install.sh` or
+`install.ps1` to replace CLI and skill with latest or selected release.
 
 To uninstall, remove `nebula` executable from selected binary directory and
 remove `nebula` from each skills directory where installed. Metrics remain
