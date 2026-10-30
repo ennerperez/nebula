@@ -393,8 +393,7 @@ nebula log-start --estimate <SECONDS> --keywords <CSV> --u2a <JSON>
 
 Records agent estimates and model scores on existing open turn. Keywords are
 trimmed, converted to lowercase, and stored individually. `--correction` is
-applied to preceding turn when one exists. Without `--session`, Nebula uses
-most recently started open turn.
+applied to preceding turn when one exists. Session resolution order: explicit `--session`, `CLAUDE_CODE_SESSION_ID` when set, then most recently started open turn. This keeps Claude Code commands scoped to the current session.
 
 `--estimate` must be a finite number greater than zero and `--clarifying`
 must be a non-negative integer.
@@ -409,7 +408,7 @@ nebula log-end --a2u <JSON> [--outcome <LABEL>] [--tip <TEXT>]
                 [--session <ID>] [--lang <en|es>]
 ```
 
-Records model `a2u` scores for open turn and marks model-side work complete.
+Records model `a2u` scores for open turn and marks model-side work complete. Uses the same session resolution order as `log-start`.
 Tips must be agent-written, direct actions of at most 90 characters. Overlong
 tips fail and are never truncated. They remain in transient session state, not
 the metrics database. The stop hook displays a tip only when the current
@@ -419,6 +418,24 @@ Host `stop` event performs final timing and closure.
 
 Success output resembles `turn 2 closed by model`. Error conditions match
 `log-start` for open-turn selection and score parsing.
+
+### `nebula analyze`
+
+```text
+nebula analyze (--text <TEXT> | --file <PATH>)
+               [--direction <u2a|a2u>] [--lang <en|es>]
+```
+
+Analyzes all supplied text with Nebula's rule-based heuristic and prints the
+weighted nebulosity score plus its ten indices. Direction defaults to `u2a`;
+use `a2u` for assistant text. File input reads the complete UTF-8 file.
+This command does not initialize the database, save input, or save results.
+It does not use model scores or learned calibration.
+
+```sh
+nebula analyze --text "Please explain this error and suggest a fix."
+nebula analyze --file ./prompt.txt --direction a2u --lang es
+```
 
 ### `nebula report`
 

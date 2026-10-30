@@ -12,13 +12,14 @@ mod import;
 mod integrations;
 mod learning;
 mod scoring;
+mod text_analysis;
 
 use crate::{
     app::App,
     cli::{Cli, Cmd, ConfigureCmd, DataCmd},
     i18n::{Lang, Localizer},
 };
-use anyhow::{Result, bail};
+use anyhow::{Context, Result, bail};
 use clap::Parser;
 use rusqlite::{Connection, OptionalExtension};
 use std::io::{self, Read};
@@ -80,6 +81,28 @@ fn run(cli: Cli) -> Result<()> {
         }
         return Ok(());
     }
+    if let Cmd::Analyze {
+        text,
+        file,
+        direction,
+        lang,
+    } = &cli.cmd
+    {
+        let environment = environment_language();
+        let localizer = Localizer::resolve(*lang, None, environment.as_deref())?;
+        let text = match (text.as_deref(), file.as_deref()) {
+            (Some(text), None) => text.to_owned(),
+            (None, Some(path)) => std::fs::read_to_string(path).with_context(|| {
+                localizer.format(
+                    "analysis.read_error",
+                    &[("path", path.display().to_string())],
+                )
+            })?,
+            _ => bail!(localizer.text("analysis.input_error")),
+        };
+        text_analysis::analyze(&text, *direction, &localizer)?;
+        return Ok(());
+    }
     let app = App::new(cli.agent_home.clone())?;
     if let Cmd::Data { cmd } = &cli.cmd {
         match cmd {
@@ -110,6 +133,7 @@ fn run(cli: Cli) -> Result<()> {
     match cli.cmd {
         Cmd::Configure { .. } => unreachable!("handled before database initialization"),
         Cmd::Data { .. } => unreachable!("handled before database initialization"),
+        Cmd::Analyze { .. } => unreachable!("handled before database initialization"),
         Cmd::Hook { event, lang } => {
             let mut input = String::new();
             io::stdin().read_to_string(&mut input)?;
@@ -136,12 +160,20 @@ fn run(cli: Cli) -> Result<()> {
                 )
             }
         }
-        Cmd::LogStart(args) => {
+        Cmd::LogStart(mut args) => {
+            args.session = resolve_session(
+                args.session,
+                std::env::var("CLAUDE_CODE_SESSION_ID").ok(),
+            );
             let localizer =
                 resolve_language(&app, &connection, args.lang, args.session.as_deref())?;
             commands::log_start(&connection, args, &localizer)?
         }
-        Cmd::LogEnd(args) => {
+        Cmd::LogEnd(mut args) => {
+            args.session = resolve_session(
+                args.session,
+                std::env::var("CLAUDE_CODE_SESSION_ID").ok(),
+            );
             let localizer =
                 resolve_language(&app, &connection, args.lang, args.session.as_deref())?;
             commands::log_end(&app, &connection, args, &localizer)?
@@ -259,6 +291,12 @@ fn parse_hook_payload(input: &str) -> std::result::Result<serde_json::Value, Hoo
     Ok(payload)
 }
 
+fn resolve_session(explicit: Option<String>, claude_session: Option<String>) -> Option<String> {
+    explicit.or_else(|| {
+        claude_session.filter(|session| !session.trim().is_empty())
+    })
+}
+
 fn resolve_language(
     app: &App,
     connection: &Connection,
@@ -297,6 +335,19 @@ fn environment_language() -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::{finish_hook, parse_hook_payload};
+
+    #[test]
+    fn log_commands_fall_back_to_claude_session_environment() {
+        assert_eq!(
+            super::resolve_session(None, Some("claude-session".into())),
+            Some("claude-session".into())
+        );
+        assert_eq!(
+            super::resolve_session(Some("explicit".into()), Some("claude-session".into())),
+            Some("explicit".into())
+        );
+        assert_eq!(super::resolve_session(None, Some("  ".into())), None);
+    }
 
     #[test]
     fn hook_payload_rejects_invalid_json_and_non_objects() {
