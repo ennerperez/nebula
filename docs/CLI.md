@@ -609,11 +609,12 @@ known imported turns, and skips unknown turn IDs.
 ## Report contents and schema
 
 The full report contains an introduction and scale, execution/usage summary,
-first-half versus second-half trends, model-versus-heuristic bias, keyword
-analysis, a profile for each selected direction, rule-based SWOT analysis, and
-agent-supplied recommendations for user, agent, and both sides. Without
-`--recs`, it records that recommendations are missing. Direction-specific
-reports omit unrelated profiles and recommendation groups.
+average, minimum, median, and maximum turns per session, first-half versus
+second-half trends, model-versus-heuristic bias, keyword analysis, a profile for
+each selected direction, rule-based SWOT analysis, and agent-supplied
+recommendations for user, agent, and both sides. Without `--recs`, it records
+that recommendations are missing. Direction-specific reports omit unrelated
+profiles and recommendation groups.
 
 One typed report model feeds Markdown, HTML, JSON, CSV, and PDF so filters,
 scope, labels, measurements, and recommendations stay consistent across

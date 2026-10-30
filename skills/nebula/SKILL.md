@@ -84,6 +84,21 @@ keywords, such as `rust,sqlite,release`. `--correction` accepts only `0` or `1`.
 Do not pass a tip when the gate is off. Do not repeat the previous tip unless
 the numbers still identify the same problem.
 
+## Local heuristic analysis
+
+Use `nebula analyze` when a local, rule-based clarity baseline helps with a
+prompt or answer:
+
+```sh
+nebula analyze --text "Please explain this error and suggest a fix."
+nebula analyze --file ./answer.txt --direction a2u --lang es
+```
+
+Direction defaults to `u2a`; use `a2u` for assistant text. The command computes
+ten heuristic metrics without opening the database or storing the input. It
+does not use model scores or learned calibration, so it does not replace the
+model-provided scores recorded by `log-start` and `log-end`.
+
 ## Language
 
 Pass `--lang en` or `--lang es` to match the conversation. Resolution order is
