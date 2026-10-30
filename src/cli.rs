@@ -32,6 +32,16 @@ pub(crate) enum Cmd {
         #[arg(long, value_enum)]
         lang: Option<Lang>,
     },
+    Analyze {
+        #[arg(long, value_name = "TEXT", required_unless_present = "file", conflicts_with = "file")]
+        text: Option<String>,
+        #[arg(long, value_name = "PATH", required_unless_present = "text", conflicts_with = "text")]
+        file: Option<PathBuf>,
+        #[arg(long, value_enum, default_value = "u2a")]
+        direction: Scope,
+        #[arg(long, value_enum)]
+        lang: Option<Lang>,
+    },
     LogStart(Start),
     LogEnd(End),
     Report {

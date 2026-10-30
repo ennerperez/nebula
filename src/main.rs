@@ -12,13 +12,14 @@ mod import;
 mod integrations;
 mod learning;
 mod scoring;
+mod text_analysis;
 
 use crate::{
     app::App,
     cli::{Cli, Cmd, ConfigureCmd, DataCmd},
     i18n::{Lang, Localizer},
 };
-use anyhow::{Result, bail};
+use anyhow::{Context, Result, bail};
 use clap::Parser;
 use rusqlite::{Connection, OptionalExtension};
 use std::io::{self, Read};
@@ -80,6 +81,28 @@ fn run(cli: Cli) -> Result<()> {
         }
         return Ok(());
     }
+    if let Cmd::Analyze {
+        text,
+        file,
+        direction,
+        lang,
+    } = &cli.cmd
+    {
+        let environment = environment_language();
+        let localizer = Localizer::resolve(*lang, None, environment.as_deref())?;
+        let text = match (text.as_deref(), file.as_deref()) {
+            (Some(text), None) => text.to_owned(),
+            (None, Some(path)) => std::fs::read_to_string(path).with_context(|| {
+                localizer.format(
+                    "analysis.read_error",
+                    &[("path", path.display().to_string())],
+                )
+            })?,
+            _ => bail!(localizer.text("analysis.input_error")),
+        };
+        text_analysis::analyze(&text, *direction, &localizer)?;
+        return Ok(());
+    }
     let app = App::new(cli.agent_home.clone())?;
     if let Cmd::Data { cmd } = &cli.cmd {
         match cmd {
@@ -110,6 +133,7 @@ fn run(cli: Cli) -> Result<()> {
     match cli.cmd {
         Cmd::Configure { .. } => unreachable!("handled before database initialization"),
         Cmd::Data { .. } => unreachable!("handled before database initialization"),
+        Cmd::Analyze { .. } => unreachable!("handled before database initialization"),
         Cmd::Hook { event, lang } => {
             let mut input = String::new();
             io::stdin().read_to_string(&mut input)?;
