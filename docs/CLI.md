@@ -419,6 +419,24 @@ Host `stop` event performs final timing and closure.
 Success output resembles `turn 2 closed by model`. Error conditions match
 `log-start` for open-turn selection and score parsing.
 
+### `nebula analyze`
+
+```text
+nebula analyze (--text <TEXT> | --file <PATH>)
+               [--direction <u2a|a2u>] [--lang <en|es>]
+```
+
+Analyzes all supplied text with Nebula's rule-based heuristic and prints the
+weighted nebulosity score plus its ten indices. Direction defaults to `u2a`;
+use `a2u` for assistant text. File input reads the complete UTF-8 file.
+This command does not initialize the database, save input, or save results.
+It does not use model scores or learned calibration.
+
+```sh
+nebula analyze --text "Please explain this error and suggest a fix."
+nebula analyze --file ./prompt.txt --direction a2u --lang es
+```
+
 ### `nebula report`
 
 ```text
