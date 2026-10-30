@@ -77,6 +77,7 @@ options, source builds, updates, and removal.
 ```sh
 nebula --version
 nebula metrics list
+nebula analyze --text "Please explain this error and suggest a fix."
 nebula report --days 7 --lang en
 nebula tips --both --share 0.3
 nebula report --days 30 --format html
@@ -104,6 +105,9 @@ Implemented commands:
 - `configure claude` safely merges lifecycle hooks into Claude Code settings.
 - `data clear --yes` permanently removes Nebula-managed local data without
   touching external transcripts, the CLI, or installed skills.
+- `analyze` computes ten rule-based clarity metrics from `--text` or `--file`
+  without opening the database or storing the input. It does not use model
+  scores or learned calibration.
 - `hook <EVENT>` processes `user-prompt-submit`, `stop`, or `notification`
   events from JSON on stdin.
 - `log-start` records an estimate, keywords, task metadata, and user-to-agent
@@ -112,7 +116,8 @@ Implemented commands:
   turn.
 - `report` builds one structured report for Markdown, standalone HTML,
   structured JSON, tidy CSV, or PDF. Agent-written recommendations enter through
-  `--recs`; `--format` is preferred and `--export` remains compatible.
+  `--recs`; its summary includes average, minimum, median, and maximum turns per
+  session. `--format` is preferred and `--export` remains compatible.
 - `tips` prints recent-window, earlier, delta, and last-turn measurements for
   live agent-written guidance; `--both`, `--all`, and `--session` select scope.
 - `estimate` predicts duration from turns with matching keywords.
