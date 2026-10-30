@@ -30,7 +30,7 @@ impl ReportDocument {
         sections: Vec<ReportSection>,
     ) -> Self {
         Self {
-            format_version: 2,
+            format_version: 3,
             title,
             lang,
             generated_at: Utc::now().to_rfc3339_opts(SecondsFormat::Secs, true),
@@ -79,6 +79,10 @@ pub(crate) struct IntroSection {
 pub(crate) struct SummaryData {
     pub(crate) turns: usize,
     pub(crate) sessions: usize,
+    pub(crate) session_turns_average: Option<f64>,
+    pub(crate) session_turns_minimum: Option<usize>,
+    pub(crate) session_turns_median: Option<f64>,
+    pub(crate) session_turns_maximum: Option<usize>,
     pub(crate) real_seconds: f64,
     pub(crate) median_turn_seconds: Option<f64>,
     pub(crate) estimate_ratio: Option<f64>,

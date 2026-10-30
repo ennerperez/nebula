@@ -8,9 +8,28 @@ use crate::{
 use anyhow::Result;
 use rusqlite::{Connection, OptionalExtension, params};
 
+fn open_log_turn(
+    connection: &Connection,
+    session: Option<&str>,
+    localizer: &Localizer,
+) -> Result<(i64, String, i64, String)> {
+    open_turn(connection, session).map_err(|error| {
+        if !error.to_string().contains("no open turn") {
+            return error;
+        }
+        match session {
+            Some(session) => anyhow::anyhow!(localizer.format(
+                "log.no_turn_session",
+                &[("session", session.to_owned())],
+            )),
+            None => anyhow::anyhow!(localizer.text("log.no_turn")),
+        }
+    })
+}
+
 pub(crate) fn log_start(connection: &Connection, args: Start, localizer: &Localizer) -> Result<()> {
-    let (turn, session, sequence, _) = open_turn(connection, args.session.as_deref())
-        .map_err(|_| anyhow::anyhow!(localizer.text("log.no_turn")))?;
+    let (turn, session, sequence, _) =
+        open_log_turn(connection, args.session.as_deref(), localizer)?;
     put_metric(
         connection,
         turn,
@@ -85,8 +104,8 @@ pub(crate) fn log_end(
             ));
         }
     }
-    let (turn, session, sequence, _) = open_turn(connection, args.session.as_deref())
-        .map_err(|_| anyhow::anyhow!(localizer.text("log.no_turn")))?;
+    let (turn, session, sequence, _) =
+        open_log_turn(connection, args.session.as_deref(), localizer)?;
     for (key, value) in parse_scores(&args.a2u, "a2u", localizer)? {
         put_metric(connection, turn, &key, value, "model", Some("a2u"))?
     }
@@ -313,6 +332,21 @@ mod tests {
             db::get_metric(&connection, turn, "corrections").unwrap(),
             None
         );
+    }
+
+    #[test]
+    fn missing_session_error_reports_the_session_id() {
+        let connection = memory_db();
+        let error = open_log_turn(&connection, Some("missing-session"), &english()).unwrap_err();
+        assert!(error.to_string().contains("missing-session"));
+    }
+
+    #[test]
+    fn database_errors_are_not_reported_as_missing_turns() {
+        let connection = Connection::open_in_memory().unwrap();
+        let error = open_log_turn(&connection, None, &english()).unwrap_err();
+        assert!(error.to_string().contains("no such table: turns"));
+        assert!(!error.to_string().contains("no open turn"));
     }
 
     #[test]

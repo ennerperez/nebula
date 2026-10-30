@@ -358,6 +358,7 @@ fn summary_document(
         .map(|row| row.session.as_str())
         .collect::<BTreeSet<_>>()
         .len();
+    let session_turns = session_turn_statistics(rows);
     let mut reals = rows.iter().filter_map(|row| row.real).collect::<Vec<_>>();
     let half = rows.len() / 2;
     let (first, second) = if half >= 3 {
@@ -368,6 +369,10 @@ fn summary_document(
     let data = SummaryData {
         turns: rows.len(),
         sessions,
+        session_turns_average: session_turns.as_ref().map(|stats| stats.average),
+        session_turns_minimum: session_turns.as_ref().map(|stats| stats.minimum),
+        session_turns_median: session_turns.as_ref().map(|stats| stats.median),
+        session_turns_maximum: session_turns.as_ref().map(|stats| stats.maximum),
         real_seconds: total(rows.iter().map(|r| r.real)),
         median_turn_seconds: median(&mut reals),
         estimate_ratio: average(rows.iter().map(|r| r.ratio)),
@@ -612,6 +617,7 @@ fn summary(
         .map(|row| row.session.as_str())
         .collect::<BTreeSet<_>>()
         .len();
+    let session_turns = session_turn_statistics(rows);
     let mut reals = rows.iter().filter_map(|row| row.real).collect::<Vec<_>>();
     let mut lines = vec![
         format!(
@@ -683,6 +689,20 @@ fn summary(
             )
         ),
     ];
+    if let Some(stats) = session_turns {
+        lines.push(format!(
+            "- {}",
+            localizer.format(
+                "report.session_turns",
+                &[
+                    ("average", fmt_number(Some(stats.average), 1)),
+                    ("minimum", stats.minimum.to_string()),
+                    ("median", fmt_number(Some(stats.median), 1)),
+                    ("maximum", stats.maximum.to_string()),
+                ],
+            )
+        ));
+    }
     let half = rows.len() / 2;
     if half >= 3 {
         let (first, second) = rows.split_at(half);
@@ -739,6 +759,35 @@ fn summary(
         ));
     }
     lines
+}
+
+#[derive(Clone, Copy)]
+struct SessionTurnStatistics {
+    average: f64,
+    minimum: usize,
+    median: f64,
+    maximum: usize,
+}
+
+fn session_turn_statistics(rows: &[TurnSummary]) -> Option<SessionTurnStatistics> {
+    let mut counts = BTreeMap::<&str, usize>::new();
+    for row in rows {
+        *counts.entry(&row.session).or_default() += 1;
+    }
+    let values = counts.values().copied().collect::<Vec<_>>();
+    if values.is_empty() {
+        return None;
+    }
+    let average = values.iter().sum::<usize>() as f64 / values.len() as f64;
+    let minimum = values.iter().copied().min().expect("non-empty counts");
+    let maximum = values.iter().copied().max().expect("non-empty counts");
+    let mut median_values = values.iter().map(|count| *count as f64).collect::<Vec<_>>();
+    Some(SessionTurnStatistics {
+        average,
+        minimum,
+        median: median(&mut median_values).expect("non-empty session counts have a median"),
+        maximum,
+    })
 }
 
 fn profile_rows(connection: &Connection, direction: &str, source: &str) -> Result<Vec<ProfileRow>> {

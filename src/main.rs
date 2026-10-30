@@ -136,12 +136,20 @@ fn run(cli: Cli) -> Result<()> {
                 )
             }
         }
-        Cmd::LogStart(args) => {
+        Cmd::LogStart(mut args) => {
+            args.session = resolve_session(
+                args.session,
+                std::env::var("CLAUDE_CODE_SESSION_ID").ok(),
+            );
             let localizer =
                 resolve_language(&app, &connection, args.lang, args.session.as_deref())?;
             commands::log_start(&connection, args, &localizer)?
         }
-        Cmd::LogEnd(args) => {
+        Cmd::LogEnd(mut args) => {
+            args.session = resolve_session(
+                args.session,
+                std::env::var("CLAUDE_CODE_SESSION_ID").ok(),
+            );
             let localizer =
                 resolve_language(&app, &connection, args.lang, args.session.as_deref())?;
             commands::log_end(&app, &connection, args, &localizer)?
@@ -259,6 +267,12 @@ fn parse_hook_payload(input: &str) -> std::result::Result<serde_json::Value, Hoo
     Ok(payload)
 }
 
+fn resolve_session(explicit: Option<String>, claude_session: Option<String>) -> Option<String> {
+    explicit.or_else(|| {
+        claude_session.filter(|session| !session.trim().is_empty())
+    })
+}
+
 fn resolve_language(
     app: &App,
     connection: &Connection,
@@ -297,6 +311,19 @@ fn environment_language() -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::{finish_hook, parse_hook_payload};
+
+    #[test]
+    fn log_commands_fall_back_to_claude_session_environment() {
+        assert_eq!(
+            super::resolve_session(None, Some("claude-session".into())),
+            Some("claude-session".into())
+        );
+        assert_eq!(
+            super::resolve_session(Some("explicit".into()), Some("claude-session".into())),
+            Some("explicit".into())
+        );
+        assert_eq!(super::resolve_session(None, Some("  ".into())), None);
+    }
 
     #[test]
     fn hook_payload_rejects_invalid_json_and_non_objects() {
