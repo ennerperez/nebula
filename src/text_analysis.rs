@@ -13,7 +13,7 @@ pub(crate) fn analyze(text: &str, direction: Scope, localizer: &Localizer) -> Re
 
     let nebulosity = KEYS
         .iter()
-        .map(|key| *metrics.get(*key).expect("heuristic returns every index"))
+        .map(|key| metrics.get(*key).copied().unwrap_or_default())
         .sum::<f64>()
         / KEYS.len() as f64;
     let direction = match direction {
@@ -35,7 +35,7 @@ pub(crate) fn analyze(text: &str, direction: Scope, localizer: &Localizer) -> Re
         println!(
             "- {}: {:.1}",
             localizer.text(&format!("metric.{key}")),
-            *metrics.get(key).expect("heuristic returns every index")
+            metrics.get(key).copied().unwrap_or_default()
         );
     }
     Ok(())
